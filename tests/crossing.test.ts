@@ -41,4 +41,17 @@ describe('車の走行試験', () => {
     const outcome = simulateCrossing(noDiagonals, vehicle('kei'), { roadY });
     expect(outcome.status).toBe('unstable');
   });
+
+  it('形がくずれたときは、くずれ始めた節点がわかる', () => {
+    // 道路だけで、まん中の節点を支えるものがない橋
+    const deckOnly = {
+      nodes: bridge.nodes.filter((n) => n.y === 0 && [0, 4, 8].includes(n.x)).map((n) =>
+        n.x === 8 ? { ...n, support: 'roller' as const } : n,
+      ),
+      members: bridge.members.filter((m) => ['B0-B1', 'B1-B2'].includes(m.id)),
+    };
+    const outcome = simulateCrossing(deckOnly, vehicle('kei'), { roadY });
+    expect(outcome.status).toBe('unstable');
+    expect(outcome.unstableNodeId).toBe('B1');
+  });
 });

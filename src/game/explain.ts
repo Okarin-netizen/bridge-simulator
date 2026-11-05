@@ -31,7 +31,7 @@ const FAILURE_TEXT: Record<FailureMode, Explanation> = {
 };
 
 /** 試験の結果を、生徒に見せる言葉にする */
-export function explainOutcome(outcome: CrossingOutcome): Explanation {
+export function explainOutcome(outcome: CrossingOutcome, options: { allowRigidJoints: boolean }): Explanation {
   const percent = Math.round(outcome.maxUtilization * 100);
 
   switch (outcome.status) {
@@ -47,14 +47,19 @@ export function explainOutcome(outcome: CrossingOutcome): Explanation {
     case 'unstable':
       return {
         title: '橋の形がくずれてしまった',
-        body: '四角形はピン接合だと、ぐにゃりと形が変わってしまいます。',
-        hints: ['四角の中に斜めの部材を入れて、三角形を作る', '角を「剛接合」にする（ラーメン構造）'],
+        body:
+          '赤い丸の節点のまわりは、支える部材が足りず、ぐにゃりと動いてしまいます。' +
+          'ピン接合の四角形や、1 本だけでぶら下がった部材は、形を保てません。',
+        hints: [
+          '赤い丸の節点から岸やほかの節点へ部材をつなぎ、三角形を作る',
+          ...(options.allowRigidJoints ? ['角を「剛接合」にする（ラーメン構造）'] : []),
+        ],
       };
     case 'gap':
       return {
         title: '道路がつながっていません',
-        body: '車が走る道路（いちばん下の高さの横の部材）が、左の岸から右の岸までつながっていません。',
-        hints: ['道路の高さで、岸から岸まで横の部材をつなげる'],
+        body: '車が走る道路（岸と同じ高さの横の部材）が、左の岸から右の岸までつながっていません。',
+        hints: ['岸と同じ高さで、左の岸から右の岸まで横の部材をつなげる'],
       };
     case 'collapsed':
       return FAILURE_TEXT[outcome.broken[0]?.mode ?? 'compression'];
