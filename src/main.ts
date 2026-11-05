@@ -7,7 +7,7 @@ import { BridgeDesign, memberCost } from './game/design';
 import { explainOutcome, modeLabel } from './game/explain';
 import { nextGuess, scorePredictions } from './game/prediction';
 import type { Guess } from './game/prediction';
-import { countStars, Progress, rateAttempt } from './game/score';
+import { countStars, Progress, rateAttempt, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
 import { SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
@@ -446,7 +446,7 @@ function updateInfoPanel(): void {
   const frames = test?.outcome.frames.slice(0, test.frameIndex + 1) ?? [];
   const maxUtilization = Math.max(0, ...frames.flatMap((f) => f.result.members.map((m) => m.utilization)));
 
-  $('max-util').textContent = frames.length > 0 ? String(Math.round(maxUtilization * 100)) : '--';
+  $('max-util').textContent = frames.length > 0 ? String(utilizationPercent(maxUtilization)) : '--';
   $('util-meter').style.width = `${Math.min(100, maxUtilization * 100)}%`;
 
   updateMemberInfo();
@@ -469,7 +469,7 @@ function updateMemberInfo(): void {
     lines.push(
       modeLabel(result.axial),
       `軸の力 <b>${(Math.abs(result.axial) / 1000).toFixed(1)} kN</b>`,
-      `負担率 <b>${Math.round(result.utilization * 100)}%</b>`,
+      `負担率 <b>${utilizationPercent(result.utilization)}%</b>`,
     );
   }
   box.innerHTML = lines.join('<br>');
@@ -525,7 +525,7 @@ function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
       lines: [
         `わたる車：${state.vehicle.name}（${(state.vehicle.mass / 1000).toFixed(1)} t）`,
         `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
-        `いちばん苦しい部材の負担率：${Math.round(test.outcome.maxUtilization * 100)}%`,
+        `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
         ...(stage.id === SANDBOX_STAGE.id ? [] : [`星：${starText(countStars(test.stars))}`]),
         ...(score && score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
       ],

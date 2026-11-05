@@ -3,6 +3,16 @@ import type { CrossingOutcome } from '../engine/crossing';
 /** 負担率がこれ以下なら「余裕をもって渡れた」とみなす */
 export const SAFE_UTILIZATION = 0.7;
 
+/**
+ * 負担率を画面に出す % にする。
+ * 四捨五入だと 70.2% が「70%」と表示されるのに星がもらえず、生徒が混乱する。
+ * 切り上げにして、表示が 70% 以下なら星の条件を満たし、100% 以下ならこわれない、とそろえる。
+ */
+export function utilizationPercent(utilization: number): number {
+  // 0.7 * 100 が 70.00000000000001 になるような計算の誤差は切り上げない
+  return Math.ceil(utilization * 100 - 1e-9);
+}
+
 export interface StarCheck {
   label: string;
   achieved: boolean;
@@ -18,7 +28,7 @@ export function rateAttempt(outcome: CrossingOutcome, cost: number, budget: numb
     { label: '車がわたり切った', achieved: crossed },
     { label: '予算の中で作れた', achieved: crossed && cost <= budget },
     {
-      label: `負担率 ${Math.round(SAFE_UTILIZATION * 100)}% 以下で、余裕をもってわたれた`,
+      label: `負担率 ${utilizationPercent(SAFE_UTILIZATION)}% 以下で、余裕をもってわたれた`,
       achieved: crossed && outcome.maxUtilization <= SAFE_UTILIZATION,
     },
   ];

@@ -1,5 +1,6 @@
 import type { CrossingOutcome } from '../engine/crossing';
 import type { FailureMode } from '../engine/types';
+import { utilizationPercent } from './score';
 
 export interface Explanation {
   title: string;
@@ -32,7 +33,7 @@ const FAILURE_TEXT: Record<FailureMode, Explanation> = {
 
 /** 試験の結果を、生徒に見せる言葉にする */
 export function explainOutcome(outcome: CrossingOutcome, options: { allowRigidJoints: boolean }): Explanation {
-  const percent = Math.round(outcome.maxUtilization * 100);
+  const percent = utilizationPercent(outcome.maxUtilization);
 
   switch (outcome.status) {
     case 'crossed':
