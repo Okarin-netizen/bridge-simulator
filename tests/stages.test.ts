@@ -30,19 +30,32 @@ function test(design: BridgeDesign) {
   return simulateCrossing(design.toBridge(), vehicle, { roadY: design.stage.roadY });
 }
 
-/** プラット・トラス（高さ 4 m、パネル幅 4 m）の部材 */
-function pratt(span: number): Segment[] {
+/** プラット・トラス（パネル幅 4 m）の部材。height をマイナスにすると道路の下に組む */
+function pratt(span: number, height = 4): Segment[] {
   const segments: Segment[] = [];
   const panels = span / 4;
+  const h = height;
   for (let i = 0; i < panels; i++) segments.push([[4 * i, 0], [4 * i + 4, 0]]);
-  for (let i = 1; i < panels - 1; i++) segments.push([[4 * i, 4], [4 * i + 4, 4]]);
-  for (let i = 1; i < panels; i++) segments.push([[4 * i, 0], [4 * i, 4]]);
-  segments.push([[0, 0], [4, 4]], [[span, 0], [span - 4, 4]]);
+  for (let i = 1; i < panels - 1; i++) segments.push([[4 * i, h], [4 * i + 4, h]]);
+  for (let i = 1; i < panels; i++) segments.push([[4 * i, 0], [4 * i, h]]);
+  segments.push([[0, 0], [4, h]], [[span, 0], [span - 4, h]]);
   for (let i = 1; i < panels - 1; i++) {
-    if (i < panels / 2) segments.push([[4 * i, 4], [4 * i + 4, 0]]);
-    else segments.push([[4 * i + 4, 4], [4 * i, 0]]);
+    if (i < panels / 2) segments.push([[4 * i, h], [4 * i + 4, 0]]);
+    else segments.push([[4 * i + 4, h], [4 * i, 0]]);
   }
   return segments;
+}
+
+/** 上の弦材と両はしの斜材（トラスで押される部材）だけ鉄の角材、ほかは木のパイプにした橋 */
+function steelWhereCompressed(stage: Stage): BridgeDesign {
+  const design = new BridgeDesign(stage);
+  for (const [[x1, y1], [x2, y2]] of pratt(stage.span)) {
+    const isTopChord = y1 > 0 && y2 > 0;
+    const isEndPost = (x1 === 0 || x1 === stage.span) && y2 > 0;
+    const [material, section]: [MaterialId, SectionId] = isTopChord || isEndPost ? ['steel', 'square'] : ['wood', 'pipe'];
+    expect(design.connect({ x: x1, y: y1 }, { x: x2, y: y2 }, material, section)).toBeNull();
+  }
+  return design;
 }
 
 describe('ステージには答えがある', () => {
@@ -74,6 +87,15 @@ describe('ステージには答えがある', () => {
 
     design.connect({ x: 4, y: 4 }, { x: 8, y: 0 }, 'wood', 'square');
     design.connect({ x: 12, y: 4 }, { x: 8, y: 0 }, 'wood', 'square');
+    expect(test(design).status).toBe('crossed');
+    expect(design.totalCost()).toBeLessThanOrEqual(stage.budget);
+  });
+
+  it('2-3：道路より上には置けないが、下に組んだトラスでわたれる', () => {
+    const stage = stageById('2-3');
+    expect(new BridgeDesign(stage).connect({ x: 0, y: 0 }, { x: 4, y: 4 }, 'wood', 'square')).not.toBeNull();
+
+    const design = build(stage, pratt(16, -4));
     expect(test(design).status).toBe('crossed');
     expect(design.totalCost()).toBeLessThanOrEqual(stage.budget);
   });
@@ -115,6 +137,23 @@ describe('ステージには答えがある', () => {
     expect(test(design).status).toBe('unstable');
 
     for (const node of design.nodes) design.toggleJoint(node.id);
+    expect(test(design).status).toBe('crossed');
+    expect(design.totalCost()).toBeLessThanOrEqual(stage.budget);
+  });
+
+  it('3-3：木だけではトラックで座屈し、全部鉄だと予算オーバー。押される部材だけ鉄にするとわたれる', () => {
+    const stage = stageById('3-3');
+    expect(test(build(stage, pratt(16), 'wood', 'hbeam')).status).toBe('collapsed');
+    expect(build(stage, pratt(16), 'steel', 'square').totalCost()).toBeGreaterThan(stage.budget);
+
+    const design = steelWhereCompressed(stage);
+    expect(test(design).status).toBe('crossed');
+    expect(design.totalCost()).toBeLessThanOrEqual(stage.budget);
+  });
+
+  it('4-1：24 m の谷でも、押される部材を鉄にすればバスがわたれる', () => {
+    const stage = stageById('4-1');
+    const design = steelWhereCompressed(stage);
     expect(test(design).status).toBe('crossed');
     expect(design.totalCost()).toBeLessThanOrEqual(stage.budget);
   });
