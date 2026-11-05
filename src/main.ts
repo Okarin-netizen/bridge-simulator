@@ -78,13 +78,33 @@ function setupControls(): void {
     design.loadSample();
     refresh();
   });
+  $('undo').addEventListener('click', undo);
   $('clear').addEventListener('click', () => {
     leaveTest();
     design.clear();
     refresh();
   });
+  document.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !isTyping(event)) {
+      event.preventDefault();
+      undo();
+    }
+  });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
   $('predict').addEventListener('click', () => setPredicting(!state.predicting));
+}
+
+function undo(): void {
+  if (!design.canUndo) return;
+  leaveTest();
+  state.pending = null;
+  design.undo();
+  refresh();
+}
+
+/** 振り返りの欄に書いているときの Ctrl + Z は、文字の取り消しにまかせる */
+function isTyping(event: KeyboardEvent): boolean {
+  return event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement;
 }
 
 function setPredicting(on: boolean): void {
@@ -412,6 +432,7 @@ function draw(): void {
 }
 
 function updateCost(): void {
+  $<HTMLButtonElement>('undo').disabled = !design.canUndo;
   const cost = design.totalCost();
   $('cost').textContent = yen(cost);
   const meter = $('cost-meter');
@@ -456,6 +477,7 @@ function updateMemberInfo(): void {
 function updateResult(): void {
   const box = $('result');
   const test = state.test;
+  const wasHidden = box.hidden;
   box.hidden = !test?.finished;
   if (!test?.finished) return;
 
@@ -477,6 +499,7 @@ function updateResult(): void {
     const next = choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small');
     box.append(next);
   }
+  if (wasHidden) box.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 /** 気づきを書いて、振り返りシートを画像で保存する欄 */
