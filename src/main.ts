@@ -563,3 +563,10 @@ showStageSelect();
 // パネルの幅が変わったときも描き直せるよう、キャンバスの大きさの変化を見張る
 new ResizeObserver(resizeCanvas).observe(canvas);
 refresh();
+
+// 一度開けば、ネットが切れても使えるようにする（開発中はキャッシュがじゃまになるので公開版だけ）
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {
+    // 登録できなくても、ふつうに遊べるので何もしない
+  });
+}
