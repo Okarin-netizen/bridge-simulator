@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>かけはしラボ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="stage-title">
+        <span class="stage-chapter">れんしゅう</span>
+        <span class="stage-name" id="stage-name"></span>
+      </div>
+      <span class="badge" id="mode-badge" hidden>試験中</span>
+      <div class="spacer"></div>
+      <div class="budget">
+        <div class="budget-label"><span>使った金額</span><span><b id="cost">¥0</b> / <span id="budget"></span></span></div>
+        <div class="meter"><div class="meter-fill" id="cost-meter"></div></div>
+      </div>
+      <label class="vehicle">
+        <span>わたる車</span>
+        <select id="vehicle"></select>
+      </label>
+    </header>
+
+    <div class="workspace">
+      <aside class="panel tools-panel">
+        <section>
+          <h2>材料</h2>
+          <div class="choice-list" id="materials"></div>
+        </section>
+        <section>
+          <h2>断面</h2>
+          <div class="choice-grid" id="sections"></div>
+        </section>
+        <section>
+          <h2>道具</h2>
+          <div class="choice-grid" id="tools"></div>
+        </section>
+        <div class="spacer"></div>
+        <div class="choice-grid">
+          <button type="button" class="tool" id="load-sample">お手本</button>
+          <button type="button" class="tool" id="clear">ぜんぶけす</button>
+        </div>
+      </aside>
+
+      <main class="canvas-area">
+        <canvas id="canvas"></canvas>
+        <div class="toast" id="toast" hidden></div>
+      </main>
+
+      <aside class="panel info-panel">
+        <section>
+          <h2>いちばん苦しい部材の負担率</h2>
+          <div class="big-number"><span id="max-util">--</span><span class="unit">%</span></div>
+          <div class="meter tall"><div class="meter-fill danger" id="util-meter"></div></div>
+          <div class="meter-scale"><span>0%</span><span>目安 70%</span><span>100% でこわれる</span></div>
+        </section>
+        <section class="legend">
+          <h2>色の見かた</h2>
+          <div class="legend-row"><span class="swatch tension"></span><span><b>青</b>＝引っぱられる（引張）</span></div>
+          <div class="legend-row"><span class="swatch compression"></span><span><b>赤</b>＝押される（圧縮）</span></div>
+          <div class="legend-note">色がこいほど力が大きい</div>
+        </section>
+        <section class="member-info" id="member-info" hidden></section>
+        <section class="result" id="result" hidden></section>
+      </aside>
+    </div>
+
+    <footer class="bottombar">
+      <div class="hint" id="hint">道具「つなぐ」で、点から点へなぞって部材を置こう。</div>
+      <button type="button" class="primary" id="run-test">試験スタート</button>
+    </footer>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
