@@ -42,8 +42,9 @@
           <div class="choice-grid" id="tools"></div>
         </section>
         <div class="spacer"></div>
+        <button type="button" class="tool" id="load-sample">お手本を置く</button>
         <div class="choice-grid">
-          <button type="button" class="tool" id="load-sample">お手本</button>
+          <button type="button" class="tool" id="undo" title="Ctrl + Z でももどせます">もどす</button>
           <button type="button" class="tool" id="clear">はじめから</button>
         </div>
       </aside>
@@ -59,15 +60,16 @@
           <div class="big-number"><span id="max-util">--</span><span class="unit">%</span></div>
           <div class="meter tall"><div class="meter-fill danger" id="util-meter"></div></div>
           <div class="meter-scale"><span>0%</span><span>目安 70%</span><span>100% でこわれる</span></div>
+          <p class="meter-note">負担率は、部材がたえられる力のうち、どれだけ使っているかを表すよ。</p>
         </section>
+        <section class="member-info" id="member-info" hidden></section>
+        <section class="result" id="result" hidden></section>
         <section class="legend">
           <h2>色の見かた</h2>
           <div class="legend-row"><span class="swatch tension"></span><span><b>青</b>＝引っぱられる（引張）</span></div>
           <div class="legend-row"><span class="swatch compression"></span><span><b>赤</b>＝押される（圧縮）</span></div>
           <div class="legend-note">色がこいほど力が大きい</div>
         </section>
-        <section class="member-info" id="member-info" hidden></section>
-        <section class="result" id="result" hidden></section>
       </aside>
     </div>
 
