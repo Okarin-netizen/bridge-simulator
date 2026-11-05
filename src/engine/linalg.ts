@@ -1,10 +1,12 @@
+export type SolveResult = { solution: number[] } | { singularColumn: number };
+
 /**
  * 連立一次方程式 K·u = f をガウスの消去法（部分ピボット選択つき）で解く。
  *
  * 橋の形がくずれる（不安定な）とき、K は特異になって解が決まらない。
- * そのときは null を返す。
+ * そのときは、解けなくなった列（= くずれる場所の自由度）の番号を返す。
  */
-export function solveLinearSystem(K: number[][], f: number[]): number[] | null {
+export function solveLinearSystem(K: number[][], f: number[]): SolveResult {
   const n = f.length;
   const a = K.map((row) => [...row]);
   const b = [...f];
@@ -18,7 +20,7 @@ export function solveLinearSystem(K: number[][], f: number[]): number[] | null {
     for (let row = col + 1; row < n; row++) {
       if (Math.abs(a[row][col]) > Math.abs(a[pivotRow][col])) pivotRow = row;
     }
-    if (Math.abs(a[pivotRow][col]) <= tolerance) return null;
+    if (Math.abs(a[pivotRow][col]) <= tolerance) return { singularColumn: col };
 
     [a[col], a[pivotRow]] = [a[pivotRow], a[col]];
     [b[col], b[pivotRow]] = [b[pivotRow], b[col]];
@@ -37,5 +39,5 @@ export function solveLinearSystem(K: number[][], f: number[]): number[] | null {
     for (let k = row + 1; k < n; k++) sum -= a[row][k] * x[k];
     x[row] = sum / a[row][row];
   }
-  return x;
+  return { solution: x };
 }

@@ -22,6 +22,8 @@ export interface Scene {
     brokenIds: Set<string>;
     vehicle: Vehicle;
     carPosition: number;
+    /** 形がくずれた節点（赤い丸で示す） */
+    unstableNodeId?: string;
   };
 }
 
@@ -41,6 +43,13 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   if (scene.preview) drawPreview(ctx, camera, scene.preview);
   if (scene.pending) drawRing(ctx, camera.toScreen(scene.pending.x, scene.pending.y), COLORS.accent);
   if (scene.test) drawCar(ctx, camera, scene.test.vehicle, scene.test.carPosition, scene.design.stage.roadY);
+
+  const unstableNode = scene.design.nodes.find((n) => n.id === scene.test?.unstableNodeId);
+  if (unstableNode) {
+    const p = camera.toScreen(unstableNode.x, unstableNode.y);
+    drawRing(ctx, p, COLORS.broken);
+    drawRing(ctx, p, COLORS.broken, 22);
+  }
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, camera: Camera, design: BridgeDesign): void {
@@ -165,11 +174,11 @@ function drawPreview(ctx: CanvasRenderingContext2D, camera: Camera, preview: Non
   drawRing(ctx, b, preview.valid ? COLORS.accent : COLORS.broken);
 }
 
-function drawRing(ctx: CanvasRenderingContext2D, p: Point, color: string): void {
+function drawRing(ctx: CanvasRenderingContext2D, p: Point, color: string, radius = NODE_RADIUS + 7): void {
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, NODE_RADIUS + 7, 0, Math.PI * 2);
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.stroke();
 }
 

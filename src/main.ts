@@ -347,7 +347,8 @@ function currentTestView(): Scene['test'] {
   const results = new Map<string, MemberResult>((frame?.result.members ?? []).map((m) => [m.id, m]));
   const brokenIds = new Set(test.finished ? test.outcome.broken.map((b) => b.id) : []);
   const carPosition = frame?.position ?? test.outcome.stoppedAt ?? 0;
-  return { results, brokenIds, vehicle: state.vehicle, carPosition };
+  const unstableNodeId = test.finished ? test.outcome.unstableNodeId : undefined;
+  return { results, brokenIds, vehicle: state.vehicle, carPosition, unstableNodeId };
 }
 
 // ---------------------------------------------------------------- 表示の更新
@@ -420,7 +421,7 @@ function updateResult(): void {
   box.hidden = !test?.finished;
   if (!test?.finished) return;
 
-  const explanation = explainOutcome(test.outcome);
+  const explanation = explainOutcome(test.outcome, stage);
   const starList =
     stage.id === SANDBOX_STAGE.id
       ? ''

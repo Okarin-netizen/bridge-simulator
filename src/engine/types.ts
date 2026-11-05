@@ -56,6 +56,8 @@ export interface MemberResult {
 export interface AnalysisResult {
   /** 形がくずれずに力を支えられるか（不安定構造なら false） */
   stable: boolean;
+  /** 形がくずれるとき、くずれ始める節点 */
+  unstableNodeId?: string;
   members: MemberResult[];
   /** 節点の変位（m）と回転（rad） */
   displacements: Map<string, { dx: number; dy: number; rot: number }>;

@@ -80,11 +80,19 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
 
   const reducedK = freeDofs.map((i) => freeDofs.map((j) => K[i][j]));
   const reducedF = freeDofs.map((i) => f[i]);
-  const solution = solveLinearSystem(reducedK, reducedF);
+  const solved = solveLinearSystem(reducedK, reducedF);
 
-  if (solution === null) {
-    return { stable: false, members: [], displacements: new Map(), reactions: new Map() };
+  if ('singularColumn' in solved) {
+    const unstableNode = nodes[Math.floor(freeDofs[solved.singularColumn] / DOF_PER_NODE)];
+    return {
+      stable: false,
+      unstableNodeId: unstableNode.id,
+      members: [],
+      displacements: new Map(),
+      reactions: new Map(),
+    };
   }
+  const solution = solved.solution;
 
   const u = new Array<number>(size).fill(0);
   freeDofs.forEach((dof, i) => (u[dof] = solution[i]));

@@ -41,6 +41,8 @@ export interface CrossingOutcome {
   maxUtilization: number;
   /** 車が止まった位置（渡り切った場合は null） */
   stoppedAt: number | null;
+  /** 形がくずれたとき、くずれ始めた節点 */
+  unstableNodeId?: string;
 }
 
 export interface CrossingOptions {
@@ -66,7 +68,7 @@ export function simulateCrossing(bridge: Bridge, vehicle: Vehicle, options: Cros
     const result = analyze(bridge, loads);
 
     if (!result.stable) {
-      return { ...outcome, status: 'unstable', stoppedAt: position };
+      return { ...outcome, status: 'unstable', stoppedAt: position, unstableNodeId: result.unstableNodeId };
     }
 
     outcome.frames.push({ position, result });
