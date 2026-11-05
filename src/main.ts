@@ -5,7 +5,10 @@ import { MATERIALS, SECTIONS } from './engine/materials';
 import type { MaterialId, MemberResult, SectionId } from './engine/types';
 import { BridgeDesign, memberCost } from './game/design';
 import { explainOutcome, modeLabel } from './game/explain';
-import { FIRST_STAGE } from './game/stage';
+import { countStars, Progress, rateAttempt } from './game/score';
+import type { StarCheck } from './game/score';
+import { SANDBOX_STAGE, STAGES } from './game/stage';
+import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
 import { MATERIAL_COLORS } from './ui/colors';
 import { drawScene, endpoints } from './ui/renderer';
@@ -21,9 +24,10 @@ const TOOLS: { id: Tool; label: string; hint: string }[] = [
 
 const FRAME_INTERVAL_MS = 40;
 
-const stage = FIRST_STAGE;
-const design = new BridgeDesign(stage);
+let stage: Stage = STAGES[0];
+let design = new BridgeDesign(stage);
 const camera = new Camera();
+const progress = new Progress();
 
 const state = {
   tool: 'connect' as Tool,
@@ -41,6 +45,7 @@ interface TestPlayback {
   outcome: CrossingOutcome;
   frameIndex: number;
   finished: boolean;
+  stars: StarCheck[];
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -50,9 +55,6 @@ const ctx = canvas.getContext('2d')!;
 // ---------------------------------------------------------------- 画面の準備
 
 function setupControls(): void {
-  $('stage-name').textContent = stage.title;
-  $('budget').textContent = yen(stage.budget);
-
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
   for (const vehicle of VEHICLES) {
     vehicleSelect.add(new Option(`${vehicle.name}　${(vehicle.mass / 1000).toFixed(1)} t`, vehicle.id));
@@ -62,8 +64,7 @@ function setupControls(): void {
     state.vehicle = VEHICLES.find((v) => v.id === vehicleSelect.value)!;
   });
 
-  renderChoiceButtons();
-
+  $('open-stage-select').addEventListener('click', showStageSelect);
   $('load-sample').addEventListener('click', () => {
     leaveTest();
     design.loadSample();
@@ -77,9 +78,57 @@ function setupControls(): void {
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
 }
 
+/** ステージを開いて、そのステージで使える材料や道具だけを並べる */
+function openStage(next: Stage): void {
+  stage = next;
+  design = new BridgeDesign(stage);
+  state.material = stage.materials[0];
+  state.section = stage.sections[0];
+  state.tool = 'connect';
+  state.pending = null;
+  leaveTest();
+
+  $('stage-chapter').textContent = stage.chapter;
+  $('stage-name').textContent = stage.title;
+  $('budget').textContent = yen(stage.budget);
+  $('hint').textContent = `${stage.goal}。${stage.hint}`;
+  $('load-sample').hidden = stage.id !== SANDBOX_STAGE.id;
+
+  const vehicleSelect = $<HTMLSelectElement>('vehicle');
+  if (stage.vehicleId) {
+    state.vehicle = VEHICLES.find((v) => v.id === stage.vehicleId)!;
+    vehicleSelect.value = state.vehicle.id;
+  }
+  vehicleSelect.disabled = stage.vehicleId !== null;
+
+  $('stage-select').hidden = true;
+  renderChoiceButtons();
+  resizeCanvas();
+}
+
+function showStageSelect(): void {
+  const cards = [...STAGES, SANDBOX_STAGE].map((s) => {
+    const stars = s.id === SANDBOX_STAGE.id ? '' : starText(progress.starsFor(s.id));
+    const button = choiceButton(
+      `<span class="card-chapter">${s.chapter}</span><span class="card-title">${s.title}</span>` +
+        `<span class="card-goal">${s.goal}</span><span class="card-stars">${stars}</span>`,
+      false,
+      () => openStage(s),
+      'stage-card',
+    );
+    return button;
+  });
+  $('stage-list').replaceChildren(...cards);
+  $('stage-select').hidden = false;
+}
+
+function starText(count: number): string {
+  return '★'.repeat(count) + '☆'.repeat(3 - count);
+}
+
 function renderChoiceButtons(): void {
   $('materials').replaceChildren(
-    ...Object.values(MATERIALS).map((material) =>
+    ...stage.materials.map((id) => MATERIALS[id]).map((material) =>
       choiceButton(
         `<span class="material-swatch" style="background:${MATERIAL_COLORS[material.id]}"></span>${material.name}` +
           `<small>強さ ${material.strength / 1e6} MPa・¥${material.pricePerMeter}/m</small>`,
@@ -94,7 +143,7 @@ function renderChoiceButtons(): void {
   );
 
   $('sections').replaceChildren(
-    ...Object.values(SECTIONS).map((section) =>
+    ...stage.sections.map((id) => SECTIONS[id]).map((section) =>
       choiceButton(section.name, state.section === section.id, () => {
         state.section = section.id;
         renderChoiceButtons();
@@ -103,7 +152,7 @@ function renderChoiceButtons(): void {
   );
 
   $('tools').replaceChildren(
-    ...TOOLS.map((tool) =>
+    ...TOOLS.filter((tool) => tool.id !== 'joint' || stage.allowRigidJoints).map((tool) =>
       choiceButton(tool.label, state.tool === tool.id, () => {
         state.tool = tool.id;
         state.pending = null;
@@ -247,7 +296,8 @@ function startTest(): void {
   state.pending = null;
   state.selectedMemberId = null;
   const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
-  state.test = { outcome, frameIndex: 0, finished: false };
+  const stars = rateAttempt(outcome, design.totalCost(), stage.budget);
+  state.test = { outcome, frameIndex: 0, finished: false, stars };
   $('run-test').textContent = '橋を直す';
   $('mode-badge').hidden = false;
   playNextFrame();
@@ -263,8 +313,22 @@ function playNextFrame(): void {
     setTimeout(playNextFrame, FRAME_INTERVAL_MS);
   } else {
     test.finished = true;
+    if (stage.id !== SANDBOX_STAGE.id) progress.record(stage.id, countStars(test.stars));
+    if (test.outcome.status === 'crossed') showHardestMoment(test);
     refresh();
   }
+}
+
+/** わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる */
+function showHardestMoment(test: TestPlayback): void {
+  const worstOf = (index: number) =>
+    Math.max(0, ...test.outcome.frames[index].result.members.map((m) => m.utilization));
+  let hardest = 0;
+  test.outcome.frames.forEach((_, i) => {
+    if (worstOf(i) > worstOf(hardest)) hardest = i;
+  });
+  test.frameIndex = hardest;
+  showToast('いちばん苦しかった瞬間を表示しています');
 }
 
 function leaveTest(): void {
@@ -357,9 +421,21 @@ function updateResult(): void {
   if (!test?.finished) return;
 
   const explanation = explainOutcome(test.outcome);
+  const starList =
+    stage.id === SANDBOX_STAGE.id
+      ? ''
+      : `<ul class="stars">${test.stars
+          .map((star) => `<li class="${star.achieved ? 'got' : ''}">${star.achieved ? '★' : '☆'} ${star.label}</li>`)
+          .join('')}</ul>`;
   box.innerHTML =
-    `<h3>${explanation.title}</h3><p>${explanation.body}</p>` +
+    `<h3>${explanation.title}</h3>${starList}<p>${explanation.body}</p>` +
     `<b>次はこうしてみよう</b><ul>${explanation.hints.map((h) => `<li>${h}</li>`).join('')}</ul>`;
+
+  const nextStage = STAGES[STAGES.indexOf(stage) + 1];
+  if (test.outcome.status === 'crossed' && nextStage) {
+    const next = choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small');
+    box.append(next);
+  }
 }
 
 let toastTimer = 0;
@@ -376,6 +452,8 @@ function yen(value: number): string {
 }
 
 setupControls();
+openStage(STAGES[0]);
+showStageSelect();
 // パネルの幅が変わったときも描き直せるよう、キャンバスの大きさの変化を見張る
 new ResizeObserver(resizeCanvas).observe(canvas);
 refresh();
