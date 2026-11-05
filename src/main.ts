@@ -5,6 +5,8 @@ import { MATERIALS, SECTIONS } from './engine/materials';
 import type { MaterialId, MemberResult, SectionId } from './engine/types';
 import { BridgeDesign, memberCost } from './game/design';
 import { explainOutcome, modeLabel } from './game/explain';
+import { nextGuess, scorePredictions } from './game/prediction';
+import type { Guess } from './game/prediction';
 import { countStars, Progress, rateAttempt } from './game/score';
 import type { StarCheck } from './game/score';
 import { SANDBOX_STAGE, STAGES } from './game/stage';
@@ -12,6 +14,7 @@ import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
 import { MATERIAL_COLORS } from './ui/colors';
 import { drawScene, endpoints } from './ui/renderer';
+import { saveReportImage } from './ui/report';
 import type { Point, Scene } from './ui/renderer';
 
 type Tool = 'connect' | 'erase' | 'joint';
@@ -39,6 +42,11 @@ const state = {
   pending: null as Point | null,
   selectedMemberId: null as string | null,
   test: null as TestPlayback | null,
+  /** 試験の前に、部材の力の向きを予想しているところか */
+  predicting: false,
+  guesses: new Map<string, Guess>(),
+  /** 振り返りシートに書く気づき */
+  reflection: '',
 };
 
 interface TestPlayback {
@@ -76,6 +84,17 @@ function setupControls(): void {
     refresh();
   });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
+  $('predict').addEventListener('click', () => setPredicting(!state.predicting));
+}
+
+function setPredicting(on: boolean): void {
+  state.predicting = on;
+  state.pending = null;
+  $('predict').setAttribute('aria-pressed', String(on));
+  $('hint').textContent = on
+    ? '部材をタップして予想しよう。1 回で赤（押される）、2 回で青（引っぱられる）、3 回でもとにもどるよ。'
+    : `${stage.goal}。${stage.hint}`;
+  draw();
 }
 
 /** ステージを開いて、そのステージで使える材料や道具だけを並べる */
@@ -86,6 +105,9 @@ function openStage(next: Stage): void {
   state.section = stage.sections[0];
   state.tool = 'connect';
   state.pending = null;
+  state.guesses.clear();
+  state.reflection = '';
+  setPredicting(false);
   leaveTest();
 
   $('stage-chapter').textContent = stage.chapter;
@@ -216,6 +238,17 @@ canvas.addEventListener('pointerdown', (event) => {
     return;
   }
 
+  if (state.predicting) {
+    const member = findMemberNear(screen);
+    if (member) {
+      const guess = nextGuess(state.guesses.get(member.id));
+      if (guess) state.guesses.set(member.id, guess);
+      else state.guesses.delete(member.id);
+    }
+    draw();
+    return;
+  }
+
   if (state.tool === 'connect') {
     canvas.setPointerCapture(event.pointerId);
     state.dragFrom = state.pending ?? snapToGrid(screen.x, screen.y);
@@ -293,6 +326,7 @@ function samePoint(p: Point, q: Point): boolean {
 // ---------------------------------------------------------------- 走行試験
 
 function startTest(): void {
+  setPredicting(false);
   state.pending = null;
   state.selectedMemberId = null;
   const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
@@ -300,6 +334,7 @@ function startTest(): void {
   state.test = { outcome, frameIndex: 0, finished: false, stars };
   $('run-test').textContent = '橋を直す';
   $('mode-badge').hidden = false;
+  $<HTMLButtonElement>('predict').disabled = true;
   playNextFrame();
 }
 
@@ -336,6 +371,7 @@ function leaveTest(): void {
   state.selectedMemberId = null;
   $('run-test').textContent = '試験スタート';
   $('mode-badge').hidden = true;
+  $<HTMLButtonElement>('predict').disabled = false;
   refresh();
 }
 
@@ -348,7 +384,8 @@ function currentTestView(): Scene['test'] {
   const brokenIds = new Set(test.finished ? test.outcome.broken.map((b) => b.id) : []);
   const carPosition = frame?.position ?? test.outcome.stoppedAt ?? 0;
   const unstableNodeId = test.finished ? test.outcome.unstableNodeId : undefined;
-  return { results, brokenIds, vehicle: state.vehicle, carPosition, unstableNodeId };
+  const wrongGuessIds = new Set(test.finished && frame ? scorePredictions(state.guesses, frame.result.members).wrongIds : []);
+  return { results, brokenIds, vehicle: state.vehicle, carPosition, unstableNodeId, wrongGuessIds };
 }
 
 // ---------------------------------------------------------------- 表示の更新
@@ -365,6 +402,7 @@ function draw(): void {
     test: currentTestView(),
     selectedMemberId: state.selectedMemberId ?? undefined,
     pending: state.pending ?? undefined,
+    guesses: state.guesses,
   };
   if (state.dragFrom && state.pointer && !samePoint(state.dragFrom, state.pointer)) {
     const length = Math.hypot(state.pointer.x - state.dragFrom.x, state.pointer.y - state.dragFrom.y);
@@ -429,14 +467,58 @@ function updateResult(): void {
           .map((star) => `<li class="${star.achieved ? 'got' : ''}">${star.achieved ? '★' : '☆'} ${star.label}</li>`)
           .join('')}</ul>`;
   box.innerHTML =
-    `<h3>${explanation.title}</h3>${starList}<p>${explanation.body}</p>` +
+    `<h3>${explanation.title}</h3>${starList}${predictionText(test)}<p>${explanation.body}</p>` +
     `<b>次はこうしてみよう</b><ul>${explanation.hints.map((h) => `<li>${h}</li>`).join('')}</ul>`;
+
+  box.append(reflectionForm(test, explanation.title));
 
   const nextStage = STAGES[STAGES.indexOf(stage) + 1];
   if (test.outcome.status === 'crossed' && nextStage) {
     const next = choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small');
     box.append(next);
   }
+}
+
+/** 気づきを書いて、振り返りシートを画像で保存する欄 */
+function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
+  const form = document.createElement('div');
+  form.className = 'reflection';
+  form.innerHTML =
+    '<label for="reflection-text">気づいたこと（振り返りシートにのります）</label>' +
+    '<textarea id="reflection-text" rows="3" placeholder="例：上の部材が赤くなったので、パイプにしたら負担率が下がった"></textarea>';
+
+  const textarea = form.querySelector('textarea')!;
+  textarea.value = state.reflection;
+  textarea.addEventListener('input', () => (state.reflection = textarea.value));
+
+  const save = choiceButton('振り返りシートを保存', false, () => {
+    const frame = test.outcome.frames[test.frameIndex];
+    const score = frame ? scorePredictions(state.guesses, frame.result.members) : null;
+    saveReportImage(canvas, {
+      stageId: stage.id,
+      stageTitle: stage.title,
+      resultTitle,
+      lines: [
+        `わたる車：${state.vehicle.name}（${(state.vehicle.mass / 1000).toFixed(1)} t）`,
+        `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
+        `いちばん苦しい部材の負担率：${Math.round(test.outcome.maxUtilization * 100)}%`,
+        ...(stage.id === SANDBOX_STAGE.id ? [] : [`星：${starText(countStars(test.stars))}`]),
+        ...(score && score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
+      ],
+      reflection: state.reflection,
+    });
+  }, 'secondary small');
+  form.append(save);
+  return form;
+}
+
+function predictionText(test: TestPlayback): string {
+  const frame = test.outcome.frames[test.frameIndex];
+  if (state.guesses.size === 0 || !frame) return '';
+  const score = scorePredictions(state.guesses, frame.result.members);
+  if (score.total === 0) return '';
+  const note = score.wrongIds.length > 0 ? '（はずれた部材に × がついています）' : '（ぜんぶ正解！）';
+  return `<p class="prediction-score">力の予想：${score.total} 本中 ${score.correct} 本正解${note}</p>`;
 }
 
 let toastTimer = 0;
