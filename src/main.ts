@@ -14,6 +14,7 @@ import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
 import { MATERIAL_COLORS } from './ui/colors';
 import { drawScene, endpoints } from './ui/renderer';
+import { CrossingPlayback } from './ui/playback';
 import { saveReportImage } from './ui/report';
 import type { Point, Scene } from './ui/renderer';
 
@@ -24,8 +25,6 @@ const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: 'erase', label: 'けす', hint: 'けしたい部材か節点をタップしよう。' },
   { id: 'joint', label: '接合をかえる', hint: '節点をタップすると、ピン接合（丸）と剛接合（四角）が切りかわるよ。' },
 ];
-
-const FRAME_INTERVAL_MS = 40;
 
 let stage: Stage = STAGES[0];
 let design = new BridgeDesign(stage);
@@ -51,8 +50,7 @@ const state = {
 
 interface TestPlayback {
   outcome: CrossingOutcome;
-  frameIndex: number;
-  finished: boolean;
+  playback: CrossingPlayback;
   stars: StarCheck[];
 }
 
@@ -352,39 +350,41 @@ function startTest(): void {
   state.selectedMemberId = null;
   const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
   const stars = rateAttempt(outcome, design.totalCost(), stage.budget);
-  state.test = { outcome, frameIndex: 0, finished: false, stars };
+  const test: TestPlayback = { outcome, playback: new CrossingPlayback(outcome), stars };
+  state.test = test;
   $('run-test').textContent = '橋を直す';
   $('mode-badge').hidden = false;
   $<HTMLButtonElement>('predict').disabled = true;
-  playNextFrame();
+  requestAnimationFrame((now) => playAnimation(test, now));
 }
 
-function playNextFrame(): void {
-  const test = state.test;
-  if (!test) return;
+/** 車が走り、こわれたときは落ちていくアニメーションを、画面の書きかえごとに進める */
+function playAnimation(test: TestPlayback, previousTime: number): void {
+  requestAnimationFrame((now) => {
+    // 「橋を直す」で試験をやめたら、アニメーションも止める
+    if (state.test !== test) return;
 
-  if (test.frameIndex < test.outcome.frames.length - 1) {
-    test.frameIndex++;
-    refresh();
-    setTimeout(playNextFrame, FRAME_INTERVAL_MS);
-  } else {
-    test.finished = true;
-    if (stage.id !== SANDBOX_STAGE.id) progress.record(stage.id, countStars(test.stars));
-    if (test.outcome.status === 'crossed') showHardestMoment(test);
-    refresh();
-  }
-}
+    // タブを切りかえたあとなどに、一気に進みすぎないようにする
+    const seconds = Math.min(0.1, (now - previousTime) / 1000);
+    test.playback.advance(seconds);
 
-/** わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる */
-function showHardestMoment(test: TestPlayback): void {
-  const worstOf = (index: number) =>
-    Math.max(0, ...test.outcome.frames[index].result.members.map((m) => m.utilization));
-  let hardest = 0;
-  test.outcome.frames.forEach((_, i) => {
-    if (worstOf(i) > worstOf(hardest)) hardest = i;
+    if (test.playback.finished) {
+      finishTest(test);
+    } else {
+      refresh();
+      playAnimation(test, now);
+    }
   });
-  test.frameIndex = hardest;
-  showToast('いちばん苦しかった瞬間を表示しています');
+}
+
+function finishTest(test: TestPlayback): void {
+  if (stage.id !== SANDBOX_STAGE.id) progress.record(stage.id, countStars(test.stars));
+  // わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる
+  if (test.outcome.status === 'crossed') {
+    test.playback.showHardestMoment();
+    showToast('いちばん苦しかった瞬間を表示しています');
+  }
+  refresh();
 }
 
 function leaveTest(): void {
@@ -400,13 +400,26 @@ function currentTestView(): Scene['test'] {
   const test = state.test;
   if (!test) return undefined;
 
-  const frame = test.outcome.frames[test.frameIndex];
-  const results = new Map<string, MemberResult>((frame?.result.members ?? []).map((m) => [m.id, m]));
-  const brokenIds = new Set(test.finished ? test.outcome.broken.map((b) => b.id) : []);
-  const carPosition = frame?.position ?? test.outcome.stoppedAt ?? 0;
-  const unstableNodeId = test.finished ? test.outcome.unstableNodeId : undefined;
-  const wrongGuessIds = new Set(test.finished && frame ? scorePredictions(state.guesses, frame.result.members).wrongIds : []);
-  return { results, brokenIds, vehicle: state.vehicle, carPosition, unstableNodeId, wrongGuessIds };
+  const { playback } = test;
+  const members = playback.currentMembers;
+  const results = new Map<string, MemberResult>(members.map((m) => [m.id, m]));
+  const brokenIds = new Set(playback.phase === 'driving' ? [] : test.outcome.broken.map((b) => b.id));
+  const unstableNodeId = playback.finished ? test.outcome.unstableNodeId : undefined;
+  const wrongGuessIds = new Set(playback.finished ? scorePredictions(state.guesses, members).wrongIds : []);
+  return {
+    results,
+    brokenIds,
+    vehicle: state.vehicle,
+    carPosition: playback.carX,
+    unstableNodeId,
+    wrongGuessIds,
+    displacements: playback.drawnDisplacements(),
+    deflectionScale: playback.deflectionScale,
+    fallDistance: playback.fallDistance,
+    memberFallDistance: playback.memberFallDistance,
+    wholeBridgeFalls: playback.wholeBridgeFalls,
+    carFalls: playback.carFalls,
+  };
 }
 
 // ---------------------------------------------------------------- 表示の更新
@@ -442,11 +455,11 @@ function updateCost(): void {
 }
 
 function updateInfoPanel(): void {
-  const test = state.test;
-  const frames = test?.outcome.frames.slice(0, test.frameIndex + 1) ?? [];
-  const maxUtilization = Math.max(0, ...frames.flatMap((f) => f.result.members.map((m) => m.utilization)));
+  const playback = state.test?.playback;
+  const onBridge = playback !== undefined && playback.frameIndex >= 0;
+  const maxUtilization = onBridge ? playback.maxUtilizationSoFar : 0;
 
-  $('max-util').textContent = frames.length > 0 ? String(utilizationPercent(maxUtilization)) : '--';
+  $('max-util').textContent = onBridge ? String(utilizationPercent(maxUtilization)) : '--';
   $('util-meter').style.width = `${Math.min(100, maxUtilization * 100)}%`;
 
   updateMemberInfo();
@@ -479,8 +492,8 @@ function updateResult(): void {
   const box = $('result');
   const test = state.test;
   const wasHidden = box.hidden;
-  box.hidden = !test?.finished;
-  if (!test?.finished) return;
+  box.hidden = !test?.playback.finished;
+  if (!test?.playback.finished) return;
 
   const explanation = explainOutcome(test.outcome, stage);
   const starList =
@@ -516,8 +529,7 @@ function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
   textarea.addEventListener('input', () => (state.reflection = textarea.value));
 
   const save = choiceButton('振り返りシートを保存', false, () => {
-    const frame = test.outcome.frames[test.frameIndex];
-    const score = frame ? scorePredictions(state.guesses, frame.result.members) : null;
+    const score = scorePredictions(state.guesses, test.playback.currentMembers);
     saveReportImage(canvas, {
       stageId: stage.id,
       stageTitle: stage.title,
@@ -527,7 +539,7 @@ function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
         `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
         `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
         ...(stage.id === SANDBOX_STAGE.id ? [] : [`星：${starText(countStars(test.stars))}`]),
-        ...(score && score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
+        ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
       ],
       reflection: state.reflection,
     });
@@ -537,9 +549,8 @@ function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
 }
 
 function predictionText(test: TestPlayback): string {
-  const frame = test.outcome.frames[test.frameIndex];
-  if (state.guesses.size === 0 || !frame) return '';
-  const score = scorePredictions(state.guesses, frame.result.members);
+  if (state.guesses.size === 0) return '';
+  const score = scorePredictions(state.guesses, test.playback.currentMembers);
   if (score.total === 0) return '';
   const note = score.wrongIds.length > 0 ? '（はずれた部材に × がついています）' : '（ぜんぶ正解！）';
   return `<p class="prediction-score">力の予想：${score.total} 本中 ${score.correct} 本正解${note}</p>`;

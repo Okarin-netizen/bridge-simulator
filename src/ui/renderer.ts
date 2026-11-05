@@ -1,6 +1,6 @@
 import type { Vehicle } from '../engine/crossing';
 import type { Guess } from '../game/prediction';
-import type { BridgeMember, MemberResult } from '../engine/types';
+import type { BridgeMember, BridgeNode, MemberResult } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
 import type { Camera } from './camera';
 import { COLORS, MATERIAL_COLORS, forceColor } from './colors';
@@ -29,6 +29,18 @@ export interface Scene {
     unstableNodeId?: string;
     /** 予想がはずれた部材（× で示す） */
     wrongGuessIds: Set<string>;
+    /** 画面に描くために大きくした、節点のたわみ（m） */
+    displacements: Map<string, { dx: number; dy: number }>;
+    /** たわみを何倍にしているか（画面のすみに書く） */
+    deflectionScale: number;
+    /** 車が落ちたきょり（m） */
+    fallDistance: number;
+    /** こわれた部材が落ちたきょり（m） */
+    memberFallDistance: number;
+    /** 形がくずれて、橋全体が落ちるか */
+    wholeBridgeFalls: boolean;
+    /** 車も落ちるか */
+    carFalls: boolean;
   };
 }
 
@@ -49,14 +61,39 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
 
   if (scene.preview) drawPreview(ctx, camera, scene.preview);
   if (scene.pending) drawRing(ctx, camera.toScreen(scene.pending.x, scene.pending.y), COLORS.accent);
-  if (scene.test) drawCar(ctx, camera, scene.test.vehicle, scene.test.carPosition, scene.design.stage.roadY);
+  if (scene.test) {
+    drawCar(ctx, camera, scene);
+    drawDeflectionNote(ctx, scene.test.deflectionScale, height);
+  }
 
   const unstableNode = scene.design.nodes.find((n) => n.id === scene.test?.unstableNodeId);
   if (unstableNode) {
-    const p = camera.toScreen(unstableNode.x, unstableNode.y);
+    const world = drawnPosition(scene, unstableNode);
+    const p = camera.toScreen(world.x, world.y);
     drawRing(ctx, p, COLORS.broken);
     drawRing(ctx, p, COLORS.broken, 22);
   }
+}
+
+/** 試験中は、たわみを足した位置に節点を描く */
+function drawnPosition(scene: Scene, node: BridgeNode): Point {
+  const d = scene.test?.displacements.get(node.id);
+  return d ? { x: node.x + d.dx, y: node.y + d.dy } : node;
+}
+
+/** 落ちていく部材か */
+function isFalling(scene: Scene, member: BridgeMember): boolean {
+  const test = scene.test;
+  return test !== undefined && test.memberFallDistance > 0 && (test.wholeBridgeFalls || test.brokenIds.has(member.id));
+}
+
+/** 部材の両はしを描く位置。落ちていく部材は、落ちたきょりの分だけ下げる */
+function drawnEndpoints(scene: Scene, member: BridgeMember): [Point, Point] {
+  const fall = isFalling(scene, member) ? scene.test!.memberFallDistance : 0;
+  return endpoints(scene.design, member).map((node) => {
+    const p = drawnPosition(scene, node);
+    return { x: p.x, y: p.y - fall };
+  }) as [Point, Point];
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, camera: Camera, design: BridgeDesign): void {
@@ -102,9 +139,11 @@ function drawTerrain(
 function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   ctx.lineCap = 'round';
   for (const member of scene.design.members) {
-    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    const [a, b] = drawnEndpoints(scene, member).map((p) => camera.toScreen(p.x, p.y));
     const broken = scene.test?.brokenIds.has(member.id) ?? false;
 
+    // 落ちていく部材は、だんだんうすくする
+    ctx.globalAlpha = isFalling(scene, member) ? Math.max(0.25, 1 - scene.test!.memberFallDistance / 8) : 1;
     ctx.lineWidth = MEMBER_WIDTH;
     ctx.strokeStyle = memberColor(member, scene);
     ctx.setLineDash(broken ? [6, 6] : []);
@@ -119,6 +158,7 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
       ctx.stroke();
     }
   }
+  ctx.globalAlpha = 1;
   ctx.setLineDash([]);
 }
 
@@ -141,7 +181,7 @@ function drawGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
 function drawWrongGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   for (const member of scene.design.members) {
     if (!scene.test?.wrongGuessIds.has(member.id)) continue;
-    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    const [a, b] = drawnEndpoints(scene, member).map((p) => camera.toScreen(p.x, p.y));
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = COLORS.ink;
@@ -167,8 +207,13 @@ function memberColor(member: BridgeMember, scene: Scene): string {
 }
 
 function drawNodes(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  const test = scene.test;
   for (const node of scene.design.nodes) {
-    const p = camera.toScreen(node.x, node.y);
+    const world = drawnPosition(scene, node);
+    // 橋全体が落ちるときは、支点以外の節点もいっしょに落とす
+    const falls = test !== undefined && test.wholeBridgeFalls && !node.support;
+    const p = camera.toScreen(world.x, world.y - (falls ? test.memberFallDistance : 0));
+    ctx.globalAlpha = falls ? Math.max(0.25, 1 - test.memberFallDistance / 8) : 1;
 
     if (node.support) drawSupport(ctx, p, node.support === 'roller');
 
@@ -185,6 +230,7 @@ function drawNodes(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene):
     ctx.fill();
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 function drawSupport(ctx: CanvasRenderingContext2D, p: Point, roller: boolean): void {
@@ -226,33 +272,82 @@ function drawRing(ctx: CanvasRenderingContext2D, p: Point, color: string, radius
   ctx.stroke();
 }
 
-function drawCar(ctx: CanvasRenderingContext2D, camera: Camera, vehicle: Vehicle, position: number, roadY: number): void {
+/**
+ * 車を描く。橋のたわみに合わせて上下・前後に傾き、こわれたときは谷へ落ちていく。
+ * タイヤは走ったきょりに合わせて回す。
+ */
+function drawCar(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  const test = scene.test!;
+  const { vehicle, carPosition: position } = test;
+  const fallDistance = test.carFalls ? test.fallDistance : 0;
+  const roadY = scene.design.stage.roadY;
   const length = vehicle.wheelbase + 1.2;
   const height = vehicle.mass > 5000 ? 3 : 1.5;
-  const wheelRadius = 0.4 * camera.scale;
-  const bodyBottom = roadY + 0.5;
+  const wheelRadius = 0.4;
 
-  const topLeft = camera.toScreen(position - length / 2, bodyBottom + height);
-  const bottomRight = camera.toScreen(position + length / 2, bodyBottom);
+  const deck = deckShapeAt(scene, position);
+  // 落ちはじめたら、前のめりに傾ける
+  const tilt = Math.atan(deck.slope) - Math.min(0.6, fallDistance * 0.15);
+  const base = camera.toScreen(position, roadY + deck.dy - fallDistance);
+
+  ctx.save();
+  ctx.translate(base.x, base.y);
+  ctx.rotate(-tilt);
+  const s = camera.scale;
+
   // 車の後ろにある部材の色も見えるよう、車体は少し透かす
   ctx.fillStyle = 'rgba(245, 184, 61, 0.7)';
   ctx.strokeStyle = COLORS.ink;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y, 6);
+  ctx.roundRect((-length / 2) * s, -(0.5 + height) * s, length * s, height * s, 6);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = COLORS.ink;
   for (const offset of [-vehicle.wheelbase / 2, vehicle.wheelbase / 2]) {
-    const wheel = camera.toScreen(position + offset, roadY + 0.4);
+    const center = { x: offset * s, y: -wheelRadius * s };
+    ctx.fillStyle = COLORS.ink;
     ctx.beginPath();
-    ctx.arc(wheel.x, wheel.y, wheelRadius, 0, Math.PI * 2);
+    ctx.arc(center.x, center.y, wheelRadius * s, 0, Math.PI * 2);
     ctx.fill();
+
+    // ホイールの線で、タイヤが回っているのがわかるようにする
+    const turn = position / wheelRadius;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(center.x - Math.cos(turn) * wheelRadius * s * 0.6, center.y - Math.sin(turn) * wheelRadius * s * 0.6);
+    ctx.lineTo(center.x + Math.cos(turn) * wheelRadius * s * 0.6, center.y + Math.sin(turn) * wheelRadius * s * 0.6);
+    ctx.stroke();
   }
+  ctx.restore();
 }
 
-export function endpoints(design: BridgeDesign, member: BridgeMember): [Point, Point] {
+/** 車の位置での道路の下がり（m）と傾き。たわんだ道路の節点のあいだを直線でつなぐ */
+function deckShapeAt(scene: Scene, x: number): { dy: number; slope: number } {
+  const roadY = scene.design.stage.roadY;
+  const road = scene.design.nodes
+    .filter((node) => Math.abs(node.y - roadY) < 1e-6)
+    .map((node) => drawnPosition(scene, node))
+    .sort((p, q) => p.x - q.x);
+
+  for (let i = 0; i < road.length - 1; i++) {
+    const [left, right] = [road[i], road[i + 1]];
+    if (x < left.x || x > right.x) continue;
+    const slope = (right.y - left.y) / (right.x - left.x);
+    return { dy: left.y + slope * (x - left.x) - roadY, slope };
+  }
+  return { dy: 0, slope: 0 };
+}
+
+function drawDeflectionNote(ctx: CanvasRenderingContext2D, scale: number, screenHeight: number): void {
+  if (scale <= 1) return;
+  ctx.font = "500 13px 'M PLUS Rounded 1c', system-ui, sans-serif";
+  ctx.fillStyle = 'rgba(31, 42, 55, 0.75)';
+  ctx.fillText(`たわみは ${scale} 倍に大きくして表示しています`, 12, screenHeight - 12);
+}
+
+export function endpoints(design: BridgeDesign, member: BridgeMember): [BridgeNode, BridgeNode] {
   const a = design.nodes.find((n) => n.id === member.a)!;
   const b = design.nodes.find((n) => n.id === member.b)!;
   return [a, b];
