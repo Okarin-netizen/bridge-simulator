@@ -1,6 +1,7 @@
 import { MATERIALS, SECTIONS } from '../engine/materials';
 import type { Bridge, BridgeMember, BridgeNode, MaterialId, SectionId } from '../engine/types';
 import { buildPrattTruss } from './presets';
+import { RIGID_JOINT_PRICE } from './stage';
 import type { Stage } from './stage';
 
 /**
@@ -13,7 +14,8 @@ export class BridgeDesign {
   private nextId = 1;
 
   constructor(readonly stage: Stage) {
-    this.nodes = stage.anchors.map((anchor) => ({ ...anchor }));
+    this.nodes = [];
+    this.clear();
   }
 
   toBridge(): Bridge {
@@ -59,6 +61,9 @@ export class BridgeDesign {
     if (!this.canPlaceNode(from.x, from.y) || !this.canPlaceNode(to.x, to.y)) {
       return 'そこには節点を置けません';
     }
+    if (!this.stage.allowDiagonals && from.x !== to.x && from.y !== to.y) {
+      return 'このステージでは斜めの部材は使えません';
+    }
 
     const a = this.nodeAt(from.x, from.y)!;
     const b = this.nodeAt(to.x, to.y)!;
@@ -83,13 +88,20 @@ export class BridgeDesign {
   }
 
   toggleJoint(id: string): void {
+    if (!this.stage.allowRigidJoints) return;
     const node = this.nodes.find((n) => n.id === id);
     if (node) node.joint = node.joint === 'pin' ? 'rigid' : 'pin';
   }
 
+  /** ステージのはじめの状態にもどす */
   clear(): void {
     this.nodes = this.stage.anchors.map((anchor) => ({ ...anchor }));
     this.members = [];
+    for (const preset of this.stage.presetMembers) {
+      const [fromX, fromY] = preset.from;
+      const [toX, toY] = preset.to;
+      this.connect({ x: fromX, y: fromY }, { x: toX, y: toY }, preset.material ?? 'wood', 'square');
+    }
   }
 
   /** お手本のプラット・トラスを置く */
@@ -112,7 +124,9 @@ export class BridgeDesign {
   }
 
   totalCost(): number {
-    return this.members.reduce((sum, m) => sum + memberCost(m, this.lengthOf(m)), 0);
+    const memberTotal = this.members.reduce((sum, m) => sum + memberCost(m, this.lengthOf(m)), 0);
+    const rigidJoints = this.nodes.filter((n) => n.joint === 'rigid').length;
+    return memberTotal + rigidJoints * RIGID_JOINT_PRICE;
   }
 
   lengthOf(member: BridgeMember): number {

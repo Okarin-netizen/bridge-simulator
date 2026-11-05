@@ -10,8 +10,9 @@
 <body>
   <div class="app">
     <header class="topbar">
+      <button type="button" class="back" id="open-stage-select" aria-label="ステージ選択">ステージ</button>
       <div class="stage-title">
-        <span class="stage-chapter">れんしゅう</span>
+        <span class="stage-chapter" id="stage-chapter"></span>
         <span class="stage-name" id="stage-name"></span>
       </div>
       <span class="badge" id="mode-badge" hidden>試験中</span>
@@ -43,7 +44,7 @@
         <div class="spacer"></div>
         <div class="choice-grid">
           <button type="button" class="tool" id="load-sample">お手本</button>
-          <button type="button" class="tool" id="clear">ぜんぶけす</button>
+          <button type="button" class="tool" id="clear">はじめから</button>
         </div>
       </aside>
 
@@ -68,6 +69,14 @@
         <section class="member-info" id="member-info" hidden></section>
         <section class="result" id="result" hidden></section>
       </aside>
+    </div>
+
+    <div class="overlay" id="stage-select" hidden>
+      <div class="overlay-box">
+        <h1>かけはしラボ</h1>
+        <p class="lead">谷に橋をかけて、車を安全にわたらせよう。どのステージから始めてもいいよ。</p>
+        <div class="stage-list" id="stage-list"></div>
+      </div>
     </div>
 
     <footer class="bottombar">
