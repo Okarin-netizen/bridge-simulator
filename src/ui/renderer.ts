@@ -1,4 +1,5 @@
 import type { Vehicle } from '../engine/crossing';
+import type { Guess } from '../game/prediction';
 import type { BridgeMember, MemberResult } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
 import type { Camera } from './camera';
@@ -16,6 +17,8 @@ export interface Scene {
   /** つなぎ始めの点（タップで 2 点を選ぶとき） */
   pending?: Point;
   selectedMemberId?: string;
+  /** 生徒の予想（部材の上に細い線で示す） */
+  guesses?: Map<string, Guess>;
   /** 試験中・試験後の表示 */
   test?: {
     results: Map<string, MemberResult>;
@@ -24,6 +27,8 @@ export interface Scene {
     carPosition: number;
     /** 形がくずれた節点（赤い丸で示す） */
     unstableNodeId?: string;
+    /** 予想がはずれた部材（× で示す） */
+    wrongGuessIds: Set<string>;
   };
 }
 
@@ -38,7 +43,9 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   if (!scene.test) drawGrid(ctx, camera, scene.design);
   drawTerrain(ctx, camera, scene.design, { width, height });
   drawMembers(ctx, camera, scene);
+  if (!scene.test) drawGuesses(ctx, camera, scene);
   drawNodes(ctx, camera, scene);
+  if (scene.test) drawWrongGuesses(ctx, camera, scene);
 
   if (scene.preview) drawPreview(ctx, camera, scene.preview);
   if (scene.pending) drawRing(ctx, camera.toScreen(scene.pending.x, scene.pending.y), COLORS.accent);
@@ -113,6 +120,43 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
     }
   }
   ctx.setLineDash([]);
+}
+
+function drawGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  for (const member of scene.design.members) {
+    const guess = scene.guesses?.get(member.id);
+    if (!guess) continue;
+    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    ctx.lineWidth = MEMBER_WIDTH + 6;
+    ctx.strokeStyle = guess === 'compression' ? 'rgb(197, 58, 28)' : 'rgb(30, 64, 175)';
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawWrongGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  for (const member of scene.design.members) {
+    if (!scene.test?.wrongGuessIds.has(member.id)) continue;
+    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(mid.x, mid.y, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(mid.x - 5, mid.y - 5);
+    ctx.lineTo(mid.x + 5, mid.y + 5);
+    ctx.moveTo(mid.x + 5, mid.y - 5);
+    ctx.lineTo(mid.x - 5, mid.y + 5);
+    ctx.stroke();
+  }
 }
 
 function memberColor(member: BridgeMember, scene: Scene): string {
