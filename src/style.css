@@ -353,6 +353,11 @@ canvas {
   border-top: 1px solid var(--line);
 }
 
+.bottombar button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .hint {
   flex-grow: 1;
   padding: 12px 16px;
@@ -501,6 +506,18 @@ canvas {
 
 .lead {
   margin: 6px 0 20px;
+  color: var(--muted);
+}
+
+.overlay-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.teacher-link {
+  font-size: 13px;
   color: var(--muted);
 }
 

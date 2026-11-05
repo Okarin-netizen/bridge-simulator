@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>かけはしラボ　先生用ページ</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <p class="eyebrow">かけはしラボ　先生用ページ</p>
+      <h1>授業での使い方</h1>
+      <p>谷に橋をかけ、車をわたらせて安全かどうかを試す教材です。中学校技術分野「材料と加工の技術」で、構造（トラス・ラーメン）と材料の性質を学ぶ場面を想定しています。</p>
+      <p><a href="./" class="button">教材を開く</a> <button type="button" class="button secondary" id="print">このページを印刷</button></p>
+    </header>
+
+    <section>
+      <h2>ねらい</h2>
+      <ul>
+        <li>部材には「押される力（圧縮）」と「引っぱられる力（引張）」がはたらくことを、色で見て理解する。</li>
+        <li>三角形を組み合わせると形がくずれにくい（トラス）、角を固めると四角形でもくずれない（ラーメン）ことに気づく。</li>
+        <li>断面の形や材料を、力のかかり方と値段を考えて選ぶ（適材適所）。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>授業の前に</h2>
+      <ul>
+        <li>各 Chromebook で一度、教材のページを開いておいてください。一度開けば、ネットにつながらなくても使えます。</li>
+        <li>生徒の進み具合（星の数）は、その端末のブラウザに保存されます。名前などの個人情報は保存しません。</li>
+        <li>振り返りシートは画像（PNG）でダウンロードされます。Google Classroom の課題にそのまま添付して提出できます。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>授業の流れの例</h2>
+      <div class="plans">
+        <div class="plan">
+          <h3>1 コマ（50 分）</h3>
+          <table>
+            <tr><th>5 分</th><td>導入：身近な橋の写真を見せ、「なぜ三角形が多い？」と問う</td></tr>
+            <tr><th>5 分</th><td>操作説明：1-1 を先生が実演（つなぐ・試験・色の見かた）</td></tr>
+            <tr><th>25 分</th><td>第 1 章〜第 2 章に取り組む。早い生徒は第 3 章へ</td></tr>
+            <tr><th>10 分</th><td>振り返り：気づいたことを書き、シートを保存して提出</td></tr>
+            <tr><th>5 分</th><td>まとめ：2-1 の「くずれる橋」を全体で確認し、三角形の効果を言葉にする</td></tr>
+          </table>
+        </div>
+        <div class="plan">
+          <h3>2 コマ</h3>
+          <table>
+            <tr><th>1 コマ目</th><td>第 1 章〜第 2 章。試験の前に「力を予想する」を使い、押される・引っぱられる部材を予想させる</td></tr>
+            <tr><th>2 コマ目</th><td>第 3 章（断面・ラーメン・材料の使い分け）と 4-1 のチャレンジ。最後に振り返りシートを提出し、何人かに発表させる</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>画面の見かた</h2>
+      <dl>
+        <dt>色</dt>
+        <dd>試験中、<b class="blue">青</b>は引っぱられる部材、<b class="red">赤</b>は押される部材です。色がこいほど大きな力がかかっています。</dd>
+        <dt>負担率</dt>
+        <dd>部材がたえられる力のうち、どれだけ使っているかの割合です。100% をこえた部材はこわれます。70% 以下なら「余裕がある」として星がもらえます。部材をタップすると、力の大きさ（kN）も見られます。</dd>
+        <dt>星</dt>
+        <dd>「わたり切った」「予算の中で作れた」「負担率 70% 以下」の 3 つです。</dd>
+        <dt>こわれ方</dt>
+        <dd>引っぱられて切れる（引張）、押されてつぶれる（圧縮）、押されてぐにゃっと曲がる（座屈）、曲げられて折れる（曲げ）の 4 つを区別して説明します。</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>ステージごとの解説</h2>
+      <p class="note">答えの例は、テストで渡れることを確かめた形です。答えはひとつではありません。</p>
+      <div id="stage-notes"></div>
+    </section>
+
+    <section>
+      <h2>計算について</h2>
+      <p>部材を棒（梁）として、構造力学の「直接剛性法」で力を計算しています。ピン接合は回転が自由、剛接合は回転しないつなぎ方として扱います。車は少しずつ前に進め、そのたびに計算し直しています。</p>
+      <p>実際の橋の設計よりもずっと単純にしたモデルなので、数値は学習用の目安です。材料の強さや値段も、ちがいがわかりやすいように決めています。</p>
+    </section>
+  </main>
+  <script type="module" src="./src/teacher/main.ts"></script>
+</body>
+</html>

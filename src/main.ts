@@ -229,7 +229,8 @@ function resizeCanvas(): void {
       minX: stage.buildArea.minX - margin,
       maxX: stage.buildArea.maxX + margin,
       minY: stage.roadY - stage.depth,
-      maxY: stage.buildArea.maxY + 1,
+      // 道路より上に組めないステージでも、車が見えるだけの空を残す
+      maxY: Math.max(stage.buildArea.maxY, 4) + 1,
     },
     { width, height },
   );

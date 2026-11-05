@@ -234,7 +234,8 @@ function drawCar(ctx: CanvasRenderingContext2D, camera: Camera, vehicle: Vehicle
 
   const topLeft = camera.toScreen(position - length / 2, bodyBottom + height);
   const bottomRight = camera.toScreen(position + length / 2, bodyBottom);
-  ctx.fillStyle = '#F5B83D';
+  // 車の後ろにある部材の色も見えるよう、車体は少し透かす
+  ctx.fillStyle = 'rgba(245, 184, 61, 0.7)';
   ctx.strokeStyle = COLORS.ink;
   ctx.lineWidth = 2;
   ctx.beginPath();
