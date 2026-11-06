@@ -51,6 +51,7 @@ export class BridgeDesign {
 
     const node: BridgeNode = { id: `n${this.nextId++}`, x, y, joint: 'pin' };
     this.nodes.push(node);
+    this.splitMembersThrough(node);
     return node;
   }
 
@@ -68,10 +69,12 @@ export class BridgeDesign {
       return 'このステージでは斜めの部材は使えません';
     }
 
-    if (this.areConnected(from, to)) return 'その 2 点はもうつながっています';
+    // 途中にある節点を素通りしないよう、節点ごとに区切った部材にする
+    const pieces = this.piecesBetween(from, to).filter(([a, b]) => !this.areConnected(a, b));
+    if (pieces.length === 0) return 'その 2 点はもうつながっています';
 
     this.saveForUndo();
-    this.addMember(from, to, material, section);
+    for (const [a, b] of pieces) this.addMember(a, b, material, section);
     return null;
   }
 
@@ -176,6 +179,8 @@ export class BridgeDesign {
   private addMember(from: Point, to: Point, material: MaterialId, section: SectionId): void {
     const a = this.nodeAt(from.x, from.y)!;
     const b = this.nodeAt(to.x, to.y)!;
+    // 新しく置いた節点で、もとからある部材が区切られて、もうつながっていることがある
+    if (this.areConnected(from, to)) return;
     this.members.push({ id: `m${this.nextId++}`, a: a.id, b: b.id, material, section });
   }
 
@@ -186,10 +191,50 @@ export class BridgeDesign {
     return this.members.some((m) => (m.a === a.id && m.b === b.id) || (m.a === b.id && m.b === a.id));
   }
 
+  /** from から to までを、線の上にある節点で区切った区間にする */
+  private piecesBetween(from: Point, to: Point): [Point, Point][] {
+    const stops = this.nodes
+      .map((node) => ({ node, t: positionAlong(node, from, to) }))
+      .filter(({ t }) => t !== null && t > 0 && t < 1)
+      .sort((p, q) => p.t! - q.t!)
+      .map(({ node }) => ({ x: node.x, y: node.y }));
+    const points = [from, ...stops, to];
+    return points.slice(1).map((point, i) => [points[i], point]);
+  }
+
+  /** 部材の途中に新しい節点を置いたときは、部材をその節点で 2 本に分けてつなぐ */
+  private splitMembersThrough(node: BridgeNode): void {
+    for (const member of [...this.members]) {
+      const a = this.nodes.find((n) => n.id === member.a)!;
+      const b = this.nodes.find((n) => n.id === member.b)!;
+      const t = positionAlong(node, a, b);
+      if (t === null || t <= 0 || t >= 1) continue;
+
+      this.members = this.members.filter((m) => m !== member);
+      this.members.push(
+        { ...member, id: `m${this.nextId++}`, b: node.id },
+        { ...member, id: `m${this.nextId++}`, a: node.id },
+      );
+    }
+  }
+
   private removeLooseNodes(): void {
     const used = new Set(this.members.flatMap((m) => [m.a, m.b]));
     this.nodes = this.nodes.filter((n) => this.isAnchor(n) || used.has(n.id));
   }
+}
+
+/**
+ * 点 p が a から b への線の上にあるとき、a から何割進んだところか（0 → 1）を返す。
+ * 線の上になければ null。
+ */
+function positionAlong(p: Point, a: Point, b: Point): number | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const cross = (p.x - a.x) * dy - (p.y - a.y) * dx;
+  if (lengthSquared === 0 || Math.abs(cross) > 1e-6 * lengthSquared) return null;
+  return ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared;
 }
 
 export function memberCost(member: BridgeMember, length: number): number {
