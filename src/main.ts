@@ -172,7 +172,7 @@ function renderChoiceButtons(): void {
     ...stage.materials.map((id) => MATERIALS[id]).map((material) =>
       choiceButton(
         `<span class="material-swatch" style="background:${MATERIAL_COLORS[material.id]}"></span>${material.name}` +
-          `<small>強さ ${material.strength / 1e6} MPa・¥${material.pricePerMeter}/m</small>`,
+          `<small>強さ ${material.strength / 1e6} MPa<br>¥${material.pricePerMeter}/m</small>`,
         state.material === material.id,
         () => {
           state.material = material.id;
@@ -263,6 +263,8 @@ canvas.addEventListener('pointerdown', (event) => {
   if (state.test) {
     state.selectedMemberId = findMemberNear(screen)?.id ?? null;
     refresh();
+    // 結果を読むためにパネルを下まで送っていても、選んだ部材の情報が見えるようにする
+    if (state.selectedMemberId) $('member-info').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     return;
   }
 
@@ -362,6 +364,7 @@ function startTest(): void {
   const test: TestPlayback = { outcome, playback: new CrossingPlayback(outcome), stars };
   state.test = test;
   $('run-test').textContent = '橋を直す';
+  $('hint').textContent = '車が橋をわたっているよ。部材の色と矢印の変わり方を見てみよう。';
   $('mode-badge').hidden = false;
   $<HTMLButtonElement>('predict').disabled = true;
   requestAnimationFrame((now) => playAnimation(test, now));
@@ -393,10 +396,12 @@ function finishTest(test: TestPlayback): void {
     test.playback.showHardestMoment();
     showToast('いちばん苦しかった瞬間を表示しています');
   }
+  $('hint').textContent = '部材をタップすると、押されているか引っぱられているかと、力の大きさがわかるよ。';
   refresh();
 }
 
 function leaveTest(): void {
+  if (state.test) $('hint').textContent = `${stage.goal}。${stage.hint}`;
   state.test = null;
   state.selectedMemberId = null;
   $('run-test').textContent = '試験スタート';
@@ -433,6 +438,7 @@ function currentTestView(): Scene['test'] {
     breaks,
     reactions: playback.currentReactions,
     showLoads: playback.showsLoads,
+    carFaded: playback.finished && test.outcome.status === 'crossed',
   };
 }
 
@@ -450,6 +456,7 @@ function draw(): void {
     test: currentTestView(),
     selectedMemberId: state.selectedMemberId ?? undefined,
     pending: state.pending ?? undefined,
+    showSectionMarks: stage.sections.length > 1,
     guesses: state.guesses,
   };
   if (state.dragFrom && state.pointer && !samePoint(state.dragFrom, state.pointer)) {

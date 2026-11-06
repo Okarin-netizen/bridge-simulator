@@ -19,6 +19,8 @@ export interface Scene {
   /** つなぎ始めの点（タップで 2 点を選ぶとき） */
   pending?: Point;
   selectedMemberId?: string;
+  /** 部材のそばに断面の印（■ ○ H）を出すか。断面を選べるステージだけで出す */
+  showSectionMarks?: boolean;
   /** 生徒の予想（部材の上に細い線で示す） */
   guesses?: Map<string, Guess>;
   /** 試験中・試験後の表示 */
@@ -49,6 +51,8 @@ export interface Scene {
     reactions: Map<string, { rx: number; ry: number }>;
     /** 車の重さと支える力の矢印を出すか */
     showLoads: boolean;
+    /** 走り終わって部材の色を見るときは、車をうすくして後ろの部材を見やすくする */
+    carFaded: boolean;
   };
 }
 
@@ -82,7 +86,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   drawTerrain(ctx, camera, scene.design, { width, height });
   drawMembers(ctx, camera, scene);
   if (!scene.test) drawGuesses(ctx, camera, scene);
-  if (!scene.test) drawSectionMarks(ctx, camera, scene);
+  if (!scene.test && scene.showSectionMarks) drawSectionMarks(ctx, camera, scene);
   if (scene.test) drawForceArrows(ctx, camera, scene);
   drawNodes(ctx, camera, scene);
   if (scene.test) drawWrongGuesses(ctx, camera, scene);
@@ -213,18 +217,26 @@ function strokeSection(ctx: CanvasRenderingContext2D, section: SectionId, color:
   }
 }
 
-/** 組み立て中は、部材のまん中に切り口の形の印（■ ○ H）をつけて、どの断面かをはっきりさせる */
+/**
+ * 組み立て中は、部材のそばに切り口の形の印（■ ○ H）をつけて、どの断面かをはっきりさせる。
+ * 部材の上に置くと節点や剛接合（四角）に見えてしまうので、少し横にずらした札にする。
+ */
 function drawSectionMarks(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   for (const member of scene.design.members) {
     const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
-    if (Math.hypot(b.x - a.x, b.y - a.y) < 50) continue;
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 50) continue;
 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = COLORS.ink;
-    ctx.lineWidth = 1.5;
+    // 部材に直角な向きのうち、画面の上側（たての部材なら右側）へずらす
+    let side = { x: (b.y - a.y) / length, y: -(b.x - a.x) / length };
+    if (side.y > 0 || (side.y === 0 && side.x < 0)) side = { x: -side.x, y: -side.y };
+    const mark = { x: (a.x + b.x) / 2 + side.x * 16, y: (a.y + b.y) / 2 + side.y * 16 };
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = COLORS.muted;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(mid.x, mid.y, 10, 0, Math.PI * 2);
+    ctx.roundRect(mark.x - 9, mark.y - 9, 18, 18, 5);
     ctx.fill();
     ctx.stroke();
 
@@ -232,15 +244,15 @@ function drawSectionMarks(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
     ctx.strokeStyle = COLORS.ink;
     ctx.beginPath();
     if (member.section === 'square') {
-      ctx.fillRect(mid.x - 4.5, mid.y - 4.5, 9, 9);
+      ctx.fillRect(mark.x - 4, mark.y - 4, 8, 8);
     } else if (member.section === 'pipe') {
-      ctx.lineWidth = 2.5;
-      ctx.arc(mid.x, mid.y, 5, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.arc(mark.x, mark.y, 4.5, 0, Math.PI * 2);
       ctx.stroke();
     } else {
-      ctx.fillRect(mid.x - 5.5, mid.y - 6, 11, 2.5);
-      ctx.fillRect(mid.x - 5.5, mid.y + 3.5, 11, 2.5);
-      ctx.fillRect(mid.x - 1.25, mid.y - 6, 2.5, 12);
+      ctx.fillRect(mark.x - 5, mark.y - 5.5, 10, 2);
+      ctx.fillRect(mark.x - 5, mark.y + 3.5, 10, 2);
+      ctx.fillRect(mark.x - 1, mark.y - 5.5, 2, 11);
     }
   }
 }
@@ -575,6 +587,7 @@ function drawCar(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): v
   const s = camera.scale;
 
   // 車の後ろにある部材の色も見えるよう、車体は少し透かす
+  if (test.carFaded) ctx.globalAlpha = 0.35;
   ctx.fillStyle = 'rgba(245, 184, 61, 0.7)';
   ctx.strokeStyle = COLORS.ink;
   ctx.lineWidth = 2;

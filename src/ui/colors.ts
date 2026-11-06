@@ -7,6 +7,7 @@ export const COLORS = {
   grass: '#6E8F4E',
   river: '#6FA8D6',
   ink: '#1F2A37',
+  muted: '#5B6675',
   accent: '#0E7C66',
   broken: '#9F1F0A',
 };
