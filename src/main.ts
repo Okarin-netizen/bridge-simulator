@@ -3,8 +3,8 @@ import { simulateCrossing, VEHICLES } from './engine/crossing';
 import type { CrossingOutcome, Vehicle } from './engine/crossing';
 import { MATERIALS, SECTIONS } from './engine/materials';
 import type { MaterialId, MemberResult, Point, SectionId } from './engine/types';
-import { BridgeDesign, memberCost } from './game/design';
-import { explainOutcome, modeLabel } from './game/explain';
+import { BridgeDesign } from './game/design';
+import { explainOutcome } from './game/explain';
 import { nextGuess, scorePredictions } from './game/prediction';
 import type { Guess } from './game/prediction';
 import { countStars, Progress, rateAttempt, utilizationPercent } from './game/score';
@@ -12,13 +12,16 @@ import type { StarCheck } from './game/score';
 import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
-import { MATERIAL_COLORS } from './ui/colors';
-import { drawScene } from './ui/renderer';
+import { materialButtons, sectionButtons, stageCard } from './ui/choices';
+import { $, choiceButton, showToast } from './ui/dom';
+import { tons, yen } from './ui/format';
+import { findMemberNear, findNodeNear, hitRadiusFor, samePoint } from './ui/hitTest';
+import type { HitRadius } from './ui/hitTest';
 import { CrossingPlayback } from './ui/playback';
-import { saveReportImage } from './ui/report';
-import { forceText, tons, yen } from './ui/format';
-import { SECTION_ICONS } from './ui/sectionIcons';
+import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
+import { saveReportImage } from './ui/report';
+import { memberInfoHtml, reflectionForm, resultHtml, starText } from './ui/resultPanel';
 
 type Tool = 'connect' | 'erase' | 'joint';
 
@@ -62,17 +65,9 @@ interface TestPlayback {
 
 type Drawer = 'tools' | 'info';
 
-/** 指はマウスほど細かく狙えないので、タッチのときは当たり判定を広げる（px） */
-const HIT_RADIUS = {
-  mouse: { node: 16, member: 10 },
-  touch: { node: 22, member: 18 },
-};
-type HitRadius = (typeof HIT_RADIUS)['mouse'];
-
 /** スマホを横にしたときの画面（style.css の @media と同じ条件） */
 const phoneLayout = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const app = document.querySelector<HTMLElement>('.app')!;
 const canvas = $<HTMLCanvasElement>('canvas');
 const ctx = canvas.getContext('2d')!;
@@ -188,58 +183,25 @@ function openStage(next: Stage): void {
 }
 
 function showStageSelect(): void {
-  const cards = [...STAGES, SANDBOX_STAGE].map((s) => {
-    const stars = isSandbox(s) ? '' : starText(progress.starsFor(s.id));
-    const button = choiceButton(
-      `<span class="card-chapter">${s.chapter}</span><span class="card-title">${s.title}</span>` +
-        `<span class="card-goal">${s.goal}</span><span class="card-stars">${stars}</span>`,
-      false,
-      () => openStage(s),
-      'stage-card',
-    );
-    return button;
-  });
+  const cards = [...STAGES, SANDBOX_STAGE].map((s) =>
+    stageCard(s, isSandbox(s) ? '' : starText(progress.starsFor(s.id)), () => openStage(s)),
+  );
   $('stage-list').replaceChildren(...cards);
   $('stage-select').hidden = false;
 }
 
-function starText(count: number): string {
-  return '★'.repeat(count) + '☆'.repeat(3 - count);
-}
-
 function renderChoiceButtons(): void {
-  // 強さは MPa だとなじみがないので、断面の曲がりにくさと同じく、木材を 1 としたときの何倍かで見せる
-  const strengthOf = (id: MaterialId) => Math.round(MATERIALS[id].strength / MATERIALS.wood.strength);
   $('materials').replaceChildren(
-    ...stage.materials.map((id) => MATERIALS[id]).map((material) =>
-      choiceButton(
-        `<span class="material-swatch" style="background:${MATERIAL_COLORS[material.id]}"></span>${material.name}` +
-          `<small>強さ ×${strengthOf(material.id)}<br>1 m ${yen(material.pricePerMeter)}</small>`,
-        state.material === material.id,
-        () => {
-          state.material = material.id;
-          renderChoiceButtons();
-        },
-        'choice',
-      ),
-    ),
+    ...materialButtons(stage.materials, state.material, (id) => {
+      state.material = id;
+      renderChoiceButtons();
+    }),
   );
-
-  // 曲がりにくさは、角材を 1 としたときの何倍かで見せる
-  const stiffnessOf = (id: SectionId) => Math.round(SECTIONS[id].I / SECTIONS.square.I);
   $('sections').replaceChildren(
-    ...stage.sections.map((id) => SECTIONS[id]).map((section) =>
-      choiceButton(
-        `<span class="section-icon">${SECTION_ICONS[section.id]}</span>${section.name}` +
-          `<small>曲がりにくさ ×${stiffnessOf(section.id)}・値段 ×${section.priceFactor}</small>`,
-        state.section === section.id,
-        () => {
-          state.section = section.id;
-          renderChoiceButtons();
-        },
-        'choice',
-      ),
-    ),
+    ...sectionButtons(stage.sections, state.section, (id) => {
+      state.section = id;
+      renderChoiceButtons();
+    }),
   );
 
   const toolLabel = TOOLS.find((tool) => tool.id === state.tool)!.label;
@@ -258,16 +220,6 @@ function renderChoiceButtons(): void {
       }),
     ),
   );
-}
-
-function choiceButton(html: string, pressed: boolean, onClick: () => void, className = 'tool'): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = className;
-  button.innerHTML = html;
-  button.setAttribute('aria-pressed', String(pressed));
-  button.addEventListener('click', onClick);
-  return button;
 }
 
 function resizeCanvas(): void {
@@ -308,7 +260,7 @@ canvas.addEventListener('pointerdown', (event) => {
   // 2 本目の指は無視する（部材を置いている途中に、別の指がふれても線がとばないように）
   if (!event.isPrimary) return;
   const screen = pointerPosition(event);
-  const hit = event.pointerType === 'touch' ? HIT_RADIUS.touch : HIT_RADIUS.mouse;
+  const hit = hitRadiusFor(event);
 
   // 材料と道具の引き出しは、橋の画面にさわったら閉じる（そのタップで部材は置かない）
   if (openedDrawer() === 'tools') {
@@ -317,7 +269,7 @@ canvas.addEventListener('pointerdown', (event) => {
   }
 
   if (state.test) {
-    state.selectedMemberId = findMemberNear(screen, hit)?.id ?? null;
+    state.selectedMemberId = findMemberNear(design, camera, screen, hit)?.id ?? null;
     refresh();
     if (state.selectedMemberId) {
       if (phoneLayout.matches) openDrawer('info');
@@ -328,7 +280,7 @@ canvas.addEventListener('pointerdown', (event) => {
   }
 
   if (state.predicting) {
-    const member = findMemberNear(screen, hit);
+    const member = findMemberNear(design, camera, screen, hit);
     if (member) {
       const guess = nextGuess(state.guesses.get(member.id));
       if (guess) state.guesses.set(member.id, guess);
@@ -345,7 +297,7 @@ canvas.addEventListener('pointerdown', (event) => {
   } else if (state.tool === 'erase') {
     eraseAt(screen, hit);
   } else if (state.tool === 'joint') {
-    const node = findNodeNear(screen, hit);
+    const node = findNodeNear(design, camera, screen, hit);
     if (node) design.toggleJoint(node.id);
   }
   refresh();
@@ -385,52 +337,13 @@ canvas.addEventListener('pointercancel', () => {
 });
 
 function eraseAt(screen: Point, hit: HitRadius): void {
-  const node = findNodeNear(screen, hit);
+  const node = findNodeNear(design, camera, screen, hit);
   if (node && !design.isAnchor(node)) {
     design.removeNode(node.id);
     return;
   }
-  const member = findMemberNear(screen, hit);
+  const member = findMemberNear(design, camera, screen, hit);
   if (member) design.removeMember(member.id);
-}
-
-function findNodeNear(screen: Point, hit: HitRadius) {
-  return nearest(design.nodes, hit.node, (node) => {
-    const p = camera.toScreen(node.x, node.y);
-    return Math.hypot(p.x - screen.x, p.y - screen.y);
-  });
-}
-
-function findMemberNear(screen: Point, hit: HitRadius) {
-  return nearest(design.members, hit.member, (member) => {
-    const [a, b] = design.endsOf(member).map((p) => camera.toScreen(p.x, p.y));
-    return distanceToSegment(screen, a, b);
-  });
-}
-
-/** 当たり判定を広げると候補が重なるので、いちばん近いものを選ぶ */
-function nearest<T>(items: readonly T[], radius: number, distanceOf: (item: T) => number): T | undefined {
-  let best: T | undefined;
-  let bestDistance = radius;
-  for (const item of items) {
-    const distance = distanceOf(item);
-    if (distance < bestDistance) {
-      best = item;
-      bestDistance = distance;
-    }
-  }
-  return best;
-}
-
-function distanceToSegment(p: Point, a: Point, b: Point): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-}
-
-function samePoint(p: Point, q: Point): boolean {
-  return p.x === q.x && p.y === q.y;
 }
 
 // ---------------------------------------------------------------- 走行試験
@@ -580,21 +493,7 @@ function updateMemberInfo(): void {
   const member = design.members.find((m) => m.id === state.selectedMemberId);
   box.hidden = !member;
   if (!member) return;
-
-  const length = design.lengthOf(member);
-  const result = currentTestView()?.results.get(member.id);
-  const lines = [
-    `<b>${MATERIALS[member.material].name}・${SECTIONS[member.section].name} ${length.toFixed(1)} m</b>`,
-    `値段 ${yen(memberCost(member, length))}`,
-  ];
-  if (result) {
-    lines.push(
-      modeLabel(result.axial),
-      `かかる力 <b>${forceText(result.axial)}</b>`,
-      `負担率 <b>${utilizationPercent(result.utilization)}%</b>`,
-    );
-  }
-  box.innerHTML = lines.join('<br>');
+  box.innerHTML = memberInfoHtml(design, member, currentTestView()?.results.get(member.id));
 }
 
 function updateResult(): void {
@@ -605,17 +504,15 @@ function updateResult(): void {
   if (!test?.playback.finished) return;
 
   const explanation = explainOutcome(test.outcome, stage);
-  const starList =
-    isSandbox(stage)
-      ? ''
-      : `<ul class="stars">${test.stars
-          .map((star) => `<li class="${star.achieved ? 'got' : ''}">${star.achieved ? '★' : '☆'} ${star.label}</li>`)
-          .join('')}</ul>`;
-  box.innerHTML =
-    `<h3>${explanation.title}</h3>${starList}${predictionText(test)}<p>${explanation.body}</p>` +
-    `<b>次はこうしてみよう</b><ul>${explanation.hints.map((h) => `<li>${h}</li>`).join('')}</ul>`;
-
-  box.append(reflectionForm(test, explanation.title));
+  const prediction = scorePredictions(state.guesses, test.playback.currentMembers);
+  box.innerHTML = resultHtml(explanation, isSandbox(stage) ? null : test.stars, prediction);
+  box.append(
+    reflectionForm(
+      state.reflection,
+      (text) => (state.reflection = text),
+      () => saveReport(test, explanation.title),
+    ),
+  );
 
   const nextStage = STAGES[STAGES.indexOf(stage) + 1];
   if (test.outcome.status === 'crossed' && nextStage) {
@@ -628,53 +525,22 @@ function updateResult(): void {
   }
 }
 
-/** 気づきを書いて、振り返りシートを画像で保存する欄 */
-function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
-  const form = document.createElement('div');
-  form.className = 'reflection';
-  form.innerHTML =
-    '<label for="reflection-text">気づいたこと（振り返りシートにのります）</label>' +
-    '<textarea id="reflection-text" rows="3" placeholder="例：上の部材が赤くなったので、パイプにしたら負担率が下がった"></textarea>';
-
-  const textarea = form.querySelector('textarea')!;
-  textarea.value = state.reflection;
-  textarea.addEventListener('input', () => (state.reflection = textarea.value));
-
-  const save = choiceButton('振り返りシートを保存', false, () => {
-    const score = scorePredictions(state.guesses, test.playback.currentMembers);
-    saveReportImage(canvas, {
-      stageId: stage.id,
-      stageTitle: stage.title,
-      resultTitle,
-      lines: [
-        `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
-        `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
-        `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
-        ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),
-        ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
-      ],
-      reflection: state.reflection,
-    });
-  }, 'secondary small');
-  form.append(save);
-  return form;
-}
-
-function predictionText(test: TestPlayback): string {
-  if (state.guesses.size === 0) return '';
+/** 振り返りシートを画像で保存する */
+function saveReport(test: TestPlayback, resultTitle: string): void {
   const score = scorePredictions(state.guesses, test.playback.currentMembers);
-  if (score.total === 0) return '';
-  const note = score.wrongIds.length > 0 ? '（はずれた部材に × がついています）' : '（ぜんぶ正解！）';
-  return `<p class="prediction-score">力の予想：${score.total} 本中 ${score.correct} 本正解${note}</p>`;
-}
-
-let toastTimer = 0;
-function showToast(message: string): void {
-  const toast = $('toast');
-  toast.textContent = message;
-  toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (toast.hidden = true), 2500);
+  saveReportImage(canvas, {
+    stageId: stage.id,
+    stageTitle: stage.title,
+    resultTitle,
+    lines: [
+      `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
+      `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
+      `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
+      ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),
+      ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
+    ],
+    reflection: state.reflection,
+  });
 }
 
 setupControls();
