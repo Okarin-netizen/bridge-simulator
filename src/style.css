@@ -300,6 +300,22 @@ canvas {
   color: var(--muted);
 }
 
+.arrow-sample {
+  width: 48px;
+  flex-shrink: 0;
+  font-size: 12px;
+  letter-spacing: -1px;
+  text-align: center;
+}
+
+.arrow-sample.tension {
+  color: rgb(30, 64, 175);
+}
+
+.arrow-sample.compression {
+  color: rgb(159, 31, 10);
+}
+
 .swatch {
   width: 48px;
   height: 10px;

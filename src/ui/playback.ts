@@ -1,6 +1,6 @@
 import type { CrossingOutcome } from '../engine/crossing';
 import { GRAVITY } from '../engine/materials';
-import type { MemberResult } from '../engine/types';
+import type { FailureMode, MemberResult } from '../engine/types';
 
 /** 画面の上で車が走る速さ（m/秒）。実際より遅くして、色の変化を目で追えるようにする */
 const DRIVE_SPEED = 8;
@@ -11,10 +11,25 @@ const MAX_DEFLECTION_SCALE = 300;
 const MAX_DRAWN_DEFLECTION = 1.5;
 /** こわれたあと、落ちていくのを見せる時間（秒） */
 const FALL_DURATION = 1.6;
+/** 最初にこわれる部材は、じっくり見せてから次の部材をこわす（秒） */
+const FIRST_BREAK_HOLD = 1.2;
+/** 続けてこわれる部材の間かく（秒） */
+const NEXT_BREAK_INTERVAL = 0.35;
+/** 1 本の部材がこわれていく動きの長さ（秒） */
+const BREAK_DURATION = 0.5;
 /** 倍率は、きりのよい数にする */
 const NICE_SCALES = [300, 200, 100, 50, 20, 10, 5, 2, 1];
 
-export type PlaybackPhase = 'driving' | 'falling' | 'finished';
+export type PlaybackPhase = 'driving' | 'breaking' | 'falling' | 'finished';
+
+/** こわれていく部材と、こわれ方の進み具合（0 → 1） */
+export interface BreakState {
+  id: string;
+  mode: FailureMode;
+  progress: number;
+  /** 最初にこわれた部材（こわれた原因）か */
+  isCause: boolean;
+}
 
 /**
  * 走行試験の結果を、アニメーションとして再生する。
@@ -33,6 +48,7 @@ export class CrossingPlayback {
   private readonly firstX: number;
   private readonly step: number;
   private fallTime = 0;
+  private breakTime = 0;
 
   constructor(readonly outcome: CrossingOutcome) {
     const { frames } = outcome;
@@ -47,7 +63,10 @@ export class CrossingPlayback {
   advance(seconds: number): void {
     if (this.phase === 'driving') {
       this.carX = Math.min(this.endX, this.carX + DRIVE_SPEED * seconds);
-      if (this.carX >= this.endX) this.phase = this.outcome.status === 'crossed' ? 'finished' : 'falling';
+      if (this.carX >= this.endX) this.phase = this.phaseAfterDriving();
+    } else if (this.phase === 'breaking') {
+      this.breakTime += seconds;
+      if (this.breakTime >= this.breakingLength) this.phase = 'falling';
     } else if (this.phase === 'falling') {
       this.fallTime += seconds;
       this.fallDistance = 0.5 * GRAVITY * this.fallTime ** 2;
@@ -72,8 +91,41 @@ export class CrossingPlayback {
     return this.phase !== 'driving' && this.outcome.status !== 'unstable';
   }
 
+  /** こわれた部材を、こわれた順に、こわれ方の進み具合といっしょに返す（まだこわれていない部材はふくめない） */
+  get breakStates(): BreakState[] {
+    if (this.phase === 'driving') return [];
+    return this.outcome.broken
+      .map((member, i) => {
+        const start = i === 0 ? 0 : FIRST_BREAK_HOLD + (i - 1) * NEXT_BREAK_INTERVAL;
+        const progress = this.phase === 'breaking' ? clamp01((this.breakTime - start) / BREAK_DURATION) : 1;
+        return { id: member.id, mode: member.mode, progress, isCause: i === 0 };
+      })
+      .filter((state) => state.progress > 0);
+  }
+
+  /** 車がまだ橋の上にいて、車の重さと支える力を矢印で見せられるか */
+  get showsLoads(): boolean {
+    return this.phase === 'driving' || this.phase === 'breaking' || (this.finished && this.outcome.status === 'crossed');
+  }
+
   get finished(): boolean {
     return this.phase === 'finished';
+  }
+
+  /** 走り終わったあと：部材がこわれたら、こわれる様子を見せてから落とす */
+  private phaseAfterDriving(): PlaybackPhase {
+    if (this.outcome.status === 'crossed') return 'finished';
+    return this.outcome.broken.length > 0 ? 'breaking' : 'falling';
+  }
+
+  private get breakingLength(): number {
+    const followers = Math.max(0, this.outcome.broken.length - 1);
+    return FIRST_BREAK_HOLD + followers * NEXT_BREAK_INTERVAL + BREAK_DURATION;
+  }
+
+  /** いまの車の位置で、支点が橋を支えている力（N） */
+  get currentReactions(): Map<string, { rx: number; ry: number }> {
+    return this.outcome.frames[this.frameIndex]?.result.reactions ?? new Map();
   }
 
   /** いまの車の位置にいちばん近い計算結果の番号（まだ橋に乗っていなければ -1） */
@@ -126,6 +178,10 @@ export class CrossingPlayback {
     }
     return drawn;
   }
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function chooseDeflectionScale(outcome: CrossingOutcome): number {

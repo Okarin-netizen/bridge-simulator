@@ -403,7 +403,9 @@ function currentTestView(): Scene['test'] {
   const { playback } = test;
   const members = playback.currentMembers;
   const results = new Map<string, MemberResult>(members.map((m) => [m.id, m]));
-  const brokenIds = new Set(playback.phase === 'driving' ? [] : test.outcome.broken.map((b) => b.id));
+  // 部材は、こわれる順番がきたものから赤くする
+  const breaks = playback.breakStates;
+  const brokenIds = new Set(breaks.map((state) => state.id));
   const unstableNodeId = playback.finished ? test.outcome.unstableNodeId : undefined;
   const wrongGuessIds = new Set(playback.finished ? scorePredictions(state.guesses, members).wrongIds : []);
   return {
@@ -419,6 +421,9 @@ function currentTestView(): Scene['test'] {
     memberFallDistance: playback.memberFallDistance,
     wholeBridgeFalls: playback.wholeBridgeFalls,
     carFalls: playback.carFalls,
+    breaks,
+    reactions: playback.currentReactions,
+    showLoads: playback.showsLoads,
   };
 }
 
