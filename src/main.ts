@@ -55,7 +55,20 @@ interface TestPlayback {
   stars: StarCheck[];
 }
 
+type Drawer = 'tools' | 'info';
+
+/** 指はマウスほど細かく狙えないので、タッチのときは当たり判定を広げる（px） */
+const HIT_RADIUS = {
+  mouse: { node: 16, member: 10 },
+  touch: { node: 22, member: 18 },
+};
+type HitRadius = (typeof HIT_RADIUS)['mouse'];
+
+/** スマホを横にしたときの画面（style.css の @media と同じ条件） */
+const phoneLayout = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const app = document.querySelector<HTMLElement>('.app')!;
 const canvas = $<HTMLCanvasElement>('canvas');
 const ctx = canvas.getContext('2d')!;
 
@@ -91,6 +104,25 @@ function setupControls(): void {
   });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
   $('predict').addEventListener('click', () => setPredicting(!state.predicting));
+
+  $('open-tools').addEventListener('click', () => openDrawer('tools'));
+  $('open-info').addEventListener('click', () => openDrawer('info'));
+  for (const button of document.querySelectorAll('[data-close-drawer]')) {
+    button.addEventListener('click', closeDrawer);
+  }
+}
+
+/** スマホの画面で、左右のパネルを引き出す */
+function openDrawer(drawer: Drawer): void {
+  app.dataset.drawer = drawer;
+}
+
+function closeDrawer(): void {
+  delete app.dataset.drawer;
+}
+
+function openedDrawer(): Drawer | undefined {
+  return app.dataset.drawer as Drawer | undefined;
 }
 
 function undo(): void {
@@ -143,6 +175,7 @@ function openStage(next: Stage): void {
   vehicleSelect.disabled = stage.vehicleId !== null;
 
   $('stage-select').hidden = true;
+  closeDrawer();
   renderChoiceButtons();
   resizeCanvas();
 }
@@ -199,6 +232,9 @@ function renderChoiceButtons(): void {
       ),
     ),
   );
+
+  const toolLabel = TOOLS.find((tool) => tool.id === state.tool)!.label;
+  $('tools-summary').textContent = `${MATERIALS[state.material].name}・${SECTIONS[state.section].name}・${toolLabel}`;
 
   $('tools').replaceChildren(
     ...TOOLS.filter((tool) => tool.id !== 'joint' || stage.allowRigidJoints).map((tool) =>
@@ -259,17 +295,27 @@ function pointerPosition(event: PointerEvent): Point {
 
 canvas.addEventListener('pointerdown', (event) => {
   const screen = pointerPosition(event);
+  const hit = event.pointerType === 'touch' ? HIT_RADIUS.touch : HIT_RADIUS.mouse;
+
+  // 材料と道具の引き出しは、橋の画面にさわったら閉じる（そのタップで部材は置かない）
+  if (openedDrawer() === 'tools') {
+    closeDrawer();
+    return;
+  }
 
   if (state.test) {
-    state.selectedMemberId = findMemberNear(screen)?.id ?? null;
+    state.selectedMemberId = findMemberNear(screen, hit)?.id ?? null;
     refresh();
-    // 結果を読むためにパネルを下まで送っていても、選んだ部材の情報が見えるようにする
-    if (state.selectedMemberId) $('member-info').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (state.selectedMemberId) {
+      if (phoneLayout.matches) openDrawer('info');
+      // 結果を読むためにパネルを下まで送っていても、選んだ部材の情報が見えるようにする
+      $('member-info').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
     return;
   }
 
   if (state.predicting) {
-    const member = findMemberNear(screen);
+    const member = findMemberNear(screen, hit);
     if (member) {
       const guess = nextGuess(state.guesses.get(member.id));
       if (guess) state.guesses.set(member.id, guess);
@@ -284,9 +330,9 @@ canvas.addEventListener('pointerdown', (event) => {
     state.dragFrom = state.pending ?? snapToGrid(screen.x, screen.y);
     state.pointer = snapToGrid(screen.x, screen.y);
   } else if (state.tool === 'erase') {
-    eraseAt(screen);
+    eraseAt(screen, hit);
   } else if (state.tool === 'joint') {
-    const node = findNodeNear(screen);
+    const node = findNodeNear(screen, hit);
     if (node) design.toggleJoint(node.id);
   }
   refresh();
@@ -318,28 +364,42 @@ canvas.addEventListener('pointerup', (event) => {
   refresh();
 });
 
-function eraseAt(screen: Point): void {
-  const node = findNodeNear(screen);
+function eraseAt(screen: Point, hit: HitRadius): void {
+  const node = findNodeNear(screen, hit);
   if (node && !design.isAnchor(node)) {
     design.removeNode(node.id);
     return;
   }
-  const member = findMemberNear(screen);
+  const member = findMemberNear(screen, hit);
   if (member) design.removeMember(member.id);
 }
 
-function findNodeNear(screen: Point) {
-  return design.nodes.find((node) => {
+function findNodeNear(screen: Point, hit: HitRadius) {
+  return nearest(design.nodes, hit.node, (node) => {
     const p = camera.toScreen(node.x, node.y);
-    return Math.hypot(p.x - screen.x, p.y - screen.y) < 16;
+    return Math.hypot(p.x - screen.x, p.y - screen.y);
   });
 }
 
-function findMemberNear(screen: Point) {
-  return design.members.find((member) => {
+function findMemberNear(screen: Point, hit: HitRadius) {
+  return nearest(design.members, hit.member, (member) => {
     const [a, b] = endpoints(design, member).map((p) => camera.toScreen(p.x, p.y));
-    return distanceToSegment(screen, a, b) < 10;
+    return distanceToSegment(screen, a, b);
   });
+}
+
+/** 当たり判定を広げると候補が重なるので、いちばん近いものを選ぶ */
+function nearest<T>(items: readonly T[], radius: number, distanceOf: (item: T) => number): T | undefined {
+  let best: T | undefined;
+  let bestDistance = radius;
+  for (const item of items) {
+    const distance = distanceOf(item);
+    if (distance < bestDistance) {
+      best = item;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 function distanceToSegment(p: Point, a: Point, b: Point): number {
@@ -356,6 +416,7 @@ function samePoint(p: Point, q: Point): boolean {
 // ---------------------------------------------------------------- 走行試験
 
 function startTest(): void {
+  closeDrawer();
   setPredicting(false);
   state.pending = null;
   state.selectedMemberId = null;
@@ -483,6 +544,11 @@ function updateInfoPanel(): void {
   $('max-util').textContent = onBridge ? String(utilizationPercent(maxUtilization)) : '--';
   $('util-meter').style.width = `${Math.min(100, maxUtilization * 100)}%`;
 
+  const resultReady = state.test?.playback.finished ?? false;
+  const infoToggle = $('open-info');
+  infoToggle.innerHTML = resultReady ? '結果を見る' : `負担率<b>${$('max-util').textContent}%</b>`;
+  infoToggle.classList.toggle('ready', resultReady);
+
   updateMemberInfo();
   updateResult();
 }
@@ -534,7 +600,10 @@ function updateResult(): void {
     const next = choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small');
     box.append(next);
   }
-  if (wasHidden) box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (wasHidden) {
+    if (phoneLayout.matches) openDrawer('info');
+    box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 }
 
 /** 気づきを書いて、振り返りシートを画像で保存する欄 */
