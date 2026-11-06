@@ -35,7 +35,7 @@
       <aside class="panel tools-panel">
         <section>
           <h2>材料</h2>
-          <div class="choice-list" id="materials"></div>
+          <div class="choice-grid" id="materials"></div>
         </section>
         <section>
           <h2>断面</h2>
@@ -45,12 +45,6 @@
           <h2>道具</h2>
           <div class="choice-grid" id="tools"></div>
         </section>
-        <div class="spacer"></div>
-        <button type="button" class="tool" id="load-sample">お手本を置く</button>
-        <div class="choice-grid">
-          <button type="button" class="tool" id="undo" title="Ctrl + Z でももどせます">もどす</button>
-          <button type="button" class="tool" id="clear">はじめから</button>
-        </div>
       </aside>
 
       <main class="canvas-area">
@@ -91,6 +85,11 @@
     </div>
 
     <footer class="bottombar">
+      <div class="edit-actions">
+        <button type="button" class="tool" id="undo" title="Ctrl + Z でももどせます">もどす</button>
+        <button type="button" class="tool" id="clear">はじめから</button>
+        <button type="button" class="tool" id="load-sample">お手本を置く</button>
+      </div>
       <div class="hint" id="hint">道具「つなぐ」で、点から点へなぞって部材を置こう。</div>
       <button type="button" class="secondary" id="predict" aria-pressed="false">力を予想する</button>
       <button type="button" class="primary" id="run-test">試験スタート</button>

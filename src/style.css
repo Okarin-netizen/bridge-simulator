@@ -48,6 +48,7 @@ h2 {
 /* 上のバー */
 .topbar {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 24px;
   height: 72px;
@@ -160,6 +161,7 @@ h2 {
 
 .tools-panel {
   width: 240px;
+  gap: 14px;
   border-right: 1px solid var(--line);
 }
 
@@ -183,7 +185,7 @@ h2 {
 .choice,
 .tool {
   min-height: 48px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
@@ -195,6 +197,11 @@ h2 {
 
 .tool {
   text-align: center;
+}
+
+/* 2 列に並べて数が奇数のときは、最後の 1 つを横いっぱいにする（「接合をかえる」が折り返さないように） */
+.choice-grid > :last-child:nth-child(odd) {
+  grid-column: span 2;
 }
 
 .tool:disabled {
@@ -315,7 +322,7 @@ canvas {
 }
 
 .arrow-sample {
-  width: 48px;
+  width: 36px;
   flex-shrink: 0;
   font-size: 12px;
   letter-spacing: -1px;
@@ -331,7 +338,8 @@ canvas {
 }
 
 .swatch {
-  width: 48px;
+  width: 36px;
+  flex-shrink: 0;
   height: 10px;
   border-radius: 5px;
 }
@@ -375,6 +383,7 @@ canvas {
 /* 下のバー */
 .bottombar {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 20px;
   height: 88px;
@@ -386,6 +395,15 @@ canvas {
 .bottombar button {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-actions .tool {
+  padding: 6px 16px;
 }
 
 .hint {
