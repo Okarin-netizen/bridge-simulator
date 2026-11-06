@@ -82,23 +82,20 @@ function setupControls(): void {
   }
   vehicleSelect.value = state.vehicle.id;
   vehicleSelect.addEventListener('change', () => {
+    // 試験の途中で車を変えると、走っている車と力の結果が合わなくなるので、試験をやめる
+    leaveTest();
     state.vehicle = VEHICLES.find((v) => v.id === vehicleSelect.value)!;
+    draw();
   });
 
   $('open-stage-select').addEventListener('click', showStageSelect);
-  $('load-sample').addEventListener('click', () => {
-    leaveTest();
-    design.loadSample();
-    refresh();
-  });
+  $('load-sample').addEventListener('click', () => changeDesign(() => design.loadSample()));
   $('undo').addEventListener('click', undo);
-  $('clear').addEventListener('click', () => {
-    leaveTest();
-    design.clear();
-    refresh();
-  });
+  $('clear').addEventListener('click', () => changeDesign(() => design.clear()));
   document.addEventListener('keydown', (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !isTyping(event)) {
+    // ステージを選んでいるあいだは、うしろの橋を変えない
+    const choosingStage = !$('stage-select').hidden;
+    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !isTyping(event) && !choosingStage) {
       event.preventDefault();
       undo();
     }
@@ -127,10 +124,14 @@ function openedDrawer(): Drawer | undefined {
 }
 
 function undo(): void {
-  if (!design.canUndo) return;
+  if (design.canUndo) changeDesign(() => design.undo());
+}
+
+/** ボタンで橋をまとめて変える。タップしかけていた点も、前の形のものなので忘れる */
+function changeDesign(change: () => void): void {
   leaveTest();
   state.pending = null;
-  design.undo();
+  change();
   refresh();
 }
 
@@ -240,6 +241,8 @@ function renderChoiceButtons(): void {
   $('tools').replaceChildren(
     ...TOOLS.filter((tool) => tool.id !== 'joint' || stage.allowRigidJoints).map((tool) =>
       choiceButton(tool.label, state.tool === tool.id, () => {
+        // 試験の結果を見ているときに道具を選んだら、橋を直しにもどる
+        leaveTest();
         state.tool = tool.id;
         state.pending = null;
         $('hint').textContent = tool.hint;
@@ -295,6 +298,8 @@ function pointerPosition(event: PointerEvent): Point {
 }
 
 canvas.addEventListener('pointerdown', (event) => {
+  // 2 本目の指は無視する（部材を置いている途中に、別の指がふれても線がとばないように）
+  if (!event.isPrimary) return;
   const screen = pointerPosition(event);
   const hit = event.pointerType === 'touch' ? HIT_RADIUS.touch : HIT_RADIUS.mouse;
 
@@ -340,14 +345,14 @@ canvas.addEventListener('pointerdown', (event) => {
 });
 
 canvas.addEventListener('pointermove', (event) => {
-  if (!state.dragFrom) return;
+  if (!state.dragFrom || !event.isPrimary) return;
   const screen = pointerPosition(event);
   state.pointer = snapToGrid(screen.x, screen.y);
   draw();
 });
 
 canvas.addEventListener('pointerup', (event) => {
-  if (!state.dragFrom) return;
+  if (!state.dragFrom || !event.isPrimary) return;
   const screen = pointerPosition(event);
   const end = snapToGrid(screen.x, screen.y);
   const start = state.dragFrom;
@@ -363,6 +368,13 @@ canvas.addEventListener('pointerup', (event) => {
     state.pending = null;
   }
   refresh();
+});
+
+// 画面のスクロールや通知などで指の動きが取り消されたら、置きかけの部材もやめる
+canvas.addEventListener('pointercancel', () => {
+  state.dragFrom = null;
+  state.pointer = null;
+  draw();
 });
 
 function eraseAt(screen: Point, hit: HitRadius): void {
