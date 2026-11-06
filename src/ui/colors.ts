@@ -1,5 +1,8 @@
 import type { MaterialId } from '../engine/types';
 
+/** 画面と振り返りシートで使う文字の書体（style.css と同じもの） */
+export const FONT_FAMILY = "'M PLUS Rounded 1c', system-ui, sans-serif";
+
 export const COLORS = {
   sky: '#DCEBF5',
   gridDot: '#9FB6C8',

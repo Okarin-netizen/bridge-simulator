@@ -2,22 +2,23 @@ import './style.css';
 import { simulateCrossing, VEHICLES } from './engine/crossing';
 import type { CrossingOutcome, Vehicle } from './engine/crossing';
 import { MATERIALS, SECTIONS } from './engine/materials';
-import type { MaterialId, MemberResult, SectionId } from './engine/types';
+import type { MaterialId, MemberResult, Point, SectionId } from './engine/types';
 import { BridgeDesign, memberCost } from './game/design';
 import { explainOutcome, modeLabel } from './game/explain';
 import { nextGuess, scorePredictions } from './game/prediction';
 import type { Guess } from './game/prediction';
 import { countStars, Progress, rateAttempt, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
-import { SANDBOX_STAGE, STAGES } from './game/stage';
+import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
 import { MATERIAL_COLORS } from './ui/colors';
-import { drawScene, endpoints } from './ui/renderer';
+import { tons, yen } from './ui/format';
+import { drawScene } from './ui/renderer';
 import { CrossingPlayback } from './ui/playback';
 import { saveReportImage } from './ui/report';
 import { SECTION_ICONS } from './ui/sectionIcons';
-import type { Point, Scene } from './ui/renderer';
+import type { Scene } from './ui/renderer';
 
 type Tool = 'connect' | 'erase' | 'joint';
 
@@ -77,7 +78,7 @@ const ctx = canvas.getContext('2d')!;
 function setupControls(): void {
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
   for (const vehicle of VEHICLES) {
-    vehicleSelect.add(new Option(`${vehicle.name}　${(vehicle.mass / 1000).toFixed(1)} t`, vehicle.id));
+    vehicleSelect.add(new Option(`${vehicle.name}　${tons(vehicle.mass)}`, vehicle.id));
   }
   vehicleSelect.value = state.vehicle.id;
   vehicleSelect.addEventListener('change', () => {
@@ -144,7 +145,7 @@ function setPredicting(on: boolean): void {
   $('predict').setAttribute('aria-pressed', String(on));
   $('hint').textContent = on
     ? '部材をタップして予想しよう。1 回で赤（押される）、2 回で青（引っぱられる）、3 回でもとにもどるよ。'
-    : `${stage.goal}。${stage.hint}`;
+    : introText(stage);
   draw();
 }
 
@@ -164,8 +165,8 @@ function openStage(next: Stage): void {
   $('stage-chapter').textContent = stage.chapter;
   $('stage-name').textContent = stage.title;
   $('budget').textContent = yen(stage.budget);
-  $('hint').textContent = `${stage.goal}。${stage.hint}`;
-  $('load-sample').hidden = stage.id !== SANDBOX_STAGE.id;
+  $('hint').textContent = introText(stage);
+  $('load-sample').hidden = !isSandbox(stage);
 
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
   if (stage.vehicleId) {
@@ -182,7 +183,7 @@ function openStage(next: Stage): void {
 
 function showStageSelect(): void {
   const cards = [...STAGES, SANDBOX_STAGE].map((s) => {
-    const stars = s.id === SANDBOX_STAGE.id ? '' : starText(progress.starsFor(s.id));
+    const stars = isSandbox(s) ? '' : starText(progress.starsFor(s.id));
     const button = choiceButton(
       `<span class="card-chapter">${s.chapter}</span><span class="card-title">${s.title}</span>` +
         `<span class="card-goal">${s.goal}</span><span class="card-stars">${stars}</span>`,
@@ -383,7 +384,7 @@ function findNodeNear(screen: Point, hit: HitRadius) {
 
 function findMemberNear(screen: Point, hit: HitRadius) {
   return nearest(design.members, hit.member, (member) => {
-    const [a, b] = endpoints(design, member).map((p) => camera.toScreen(p.x, p.y));
+    const [a, b] = design.endsOf(member).map((p) => camera.toScreen(p.x, p.y));
     return distanceToSegment(screen, a, b);
   });
 }
@@ -451,7 +452,7 @@ function playAnimation(test: TestPlayback, previousTime: number): void {
 }
 
 function finishTest(test: TestPlayback): void {
-  if (stage.id !== SANDBOX_STAGE.id) progress.record(stage.id, countStars(test.stars));
+  if (!isSandbox(stage)) progress.record(stage.id, countStars(test.stars));
   // わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる
   if (test.outcome.status === 'crossed') {
     test.playback.showHardestMoment();
@@ -462,7 +463,7 @@ function finishTest(test: TestPlayback): void {
 }
 
 function leaveTest(): void {
-  if (state.test) $('hint').textContent = `${stage.goal}。${stage.hint}`;
+  if (state.test) $('hint').textContent = introText(stage);
   state.test = null;
   state.selectedMemberId = null;
   $('run-test').textContent = '試験スタート';
@@ -584,7 +585,7 @@ function updateResult(): void {
 
   const explanation = explainOutcome(test.outcome, stage);
   const starList =
-    stage.id === SANDBOX_STAGE.id
+    isSandbox(stage)
       ? ''
       : `<ul class="stars">${test.stars
           .map((star) => `<li class="${star.achieved ? 'got' : ''}">${star.achieved ? '★' : '☆'} ${star.label}</li>`)
@@ -625,10 +626,10 @@ function reflectionForm(test: TestPlayback, resultTitle: string): HTMLElement {
       stageTitle: stage.title,
       resultTitle,
       lines: [
-        `わたる車：${state.vehicle.name}（${(state.vehicle.mass / 1000).toFixed(1)} t）`,
+        `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
         `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
         `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
-        ...(stage.id === SANDBOX_STAGE.id ? [] : [`星：${starText(countStars(test.stars))}`]),
+        ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),
         ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
       ],
       reflection: state.reflection,
@@ -653,10 +654,6 @@ function showToast(message: string): void {
   toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => (toast.hidden = true), 2500);
-}
-
-function yen(value: number): string {
-  return `¥${value.toLocaleString('ja-JP')}`;
 }
 
 setupControls();

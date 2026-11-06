@@ -1,3 +1,5 @@
+import type { Point } from '../engine/types';
+
 /** 橋の座標（m、y 上向き）と画面の座標（px、y 下向き）を変換する */
 export class Camera {
   scale = 1;
@@ -16,11 +18,11 @@ export class Camera {
     this.offsetY = (screen.height - worldHeight * this.scale) / 2 + world.maxY * this.scale;
   }
 
-  toScreen(x: number, y: number): { x: number; y: number } {
+  toScreen(x: number, y: number): Point {
     return { x: x * this.scale + this.offsetX, y: this.offsetY - y * this.scale };
   }
 
-  toWorld(x: number, y: number): { x: number; y: number } {
+  toWorld(x: number, y: number): Point {
     return { x: (x - this.offsetX) / this.scale, y: (this.offsetY - y) / this.scale };
   }
 }

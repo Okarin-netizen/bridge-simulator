@@ -1,13 +1,8 @@
 import { MATERIALS, SECTIONS } from '../engine/materials';
-import type { Bridge, BridgeMember, BridgeNode, MaterialId, SectionId } from '../engine/types';
+import type { Bridge, BridgeMember, BridgeNode, MaterialId, Point, SectionId } from '../engine/types';
 import { buildPrattTruss } from './presets';
 import { RIGID_JOINT_PRICE } from './stage';
 import type { Stage } from './stage';
-
-interface Point {
-  x: number;
-  y: number;
-}
 
 /** 「もどす」でさかのぼれる回数 */
 const UNDO_LIMIT = 50;
@@ -60,12 +55,7 @@ export class BridgeDesign {
   }
 
   /** 2 点を部材でつなぐ。つなげなかったときは理由を返す */
-  connect(
-    from: Point,
-    to: Point,
-    material: MaterialId,
-    section: SectionId,
-  ): string | null {
+  connect(from: Point, to: Point, material: MaterialId, section: SectionId): string | null {
     const length = Math.hypot(to.x - from.x, to.y - from.y);
     if (length === 0) return null;
     if (length > this.stage.maxMemberLength + 1e-6) {
@@ -141,9 +131,15 @@ export class BridgeDesign {
     return memberTotal + rigidJoints * RIGID_JOINT_PRICE;
   }
 
-  lengthOf(member: BridgeMember): number {
+  /** 部材の両はしの節点 */
+  endsOf(member: BridgeMember): [BridgeNode, BridgeNode] {
     const a = this.nodes.find((n) => n.id === member.a)!;
     const b = this.nodes.find((n) => n.id === member.b)!;
+    return [a, b];
+  }
+
+  lengthOf(member: BridgeMember): number {
+    const [a, b] = this.endsOf(member);
     return Math.hypot(b.x - a.x, b.y - a.y);
   }
 

@@ -120,6 +120,11 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
   return { stable: true, members, displacements, reactions };
 }
 
+/** いちばん苦しい部材の負担率（部材がなければ 0） */
+export function worstUtilization(members: MemberResult[]): number {
+  return Math.max(0, ...members.map((m) => m.utilization));
+}
+
 function describeMember(member: BridgeMember, nodeById: Map<string, BridgeNode>): MemberGeometry {
   const nodeA = nodeById.get(member.a);
   const nodeB = nodeById.get(member.b);
@@ -133,7 +138,7 @@ function describeMember(member: BridgeMember, nodeById: Map<string, BridgeNode>)
   return { member, nodeA, nodeB, length, cos: dx / length, sin: dy / length };
 }
 
-export function memberMass({ member, length }: Pick<MemberGeometry, 'member' | 'length'>): number {
+function memberMass({ member, length }: Pick<MemberGeometry, 'member' | 'length'>): number {
   return MATERIALS[member.material].density * SECTIONS[member.section].A * length;
 }
 

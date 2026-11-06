@@ -3,6 +3,7 @@ import { MATERIALS, SECTIONS } from '../engine/materials';
 import { VEHICLES } from '../engine/crossing';
 import { STAGES } from '../game/stage';
 import type { Stage } from '../game/stage';
+import { tons, yen } from '../ui/format';
 import { TEACHER_NOTES } from './notes';
 
 function stageCard(stage: Stage): HTMLElement {
@@ -10,8 +11,8 @@ function stageCard(stage: Stage): HTMLElement {
   const vehicle = VEHICLES.find((v) => v.id === stage.vehicleId);
   const conditions = [
     `谷の幅 ${stage.span} m`,
-    vehicle ? `${vehicle.name}（${(vehicle.mass / 1000).toFixed(1)} t）` : '車は自由',
-    `予算 ¥${stage.budget.toLocaleString('ja-JP')}`,
+    vehicle ? `${vehicle.name}（${tons(vehicle.mass)}）` : '車は自由',
+    `予算 ${yen(stage.budget)}`,
     `材料：${stage.materials.map((id) => MATERIALS[id].name).join('・')}`,
     `断面：${stage.sections.map((id) => SECTIONS[id].name).join('・')}`,
   ];

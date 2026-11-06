@@ -1,4 +1,4 @@
-import { COLORS } from './colors';
+import { COLORS, FONT_FAMILY } from './colors';
 
 export interface ReportContent {
   /** 保存するファイル名に使う（日本語のファイル名は端末によって無視されるため英数字にする） */
@@ -11,7 +11,6 @@ export interface ReportContent {
 
 const WIDTH = 1200;
 const PADDING = 48;
-const FONT = "'M PLUS Rounded 1c', system-ui, sans-serif";
 
 /**
  * 振り返りシートを 1 枚の画像にする。
@@ -32,25 +31,25 @@ export function saveReportImage(bridgeCanvas: HTMLCanvasElement, content: Report
   ctx.fillRect(0, 0, WIDTH, height);
 
   ctx.fillStyle = COLORS.ink;
-  ctx.font = `700 22px ${FONT}`;
+  ctx.font = `700 22px ${FONT_FAMILY}`;
   ctx.fillText(`かけはしラボ　振り返りシート　${new Date().toLocaleDateString('ja-JP')}`, PADDING, 60);
-  ctx.font = `800 34px ${FONT}`;
+  ctx.font = `800 34px ${FONT_FAMILY}`;
   ctx.fillText(`${content.stageTitle}：${content.resultTitle}`, PADDING, 110);
 
   ctx.drawImage(bridgeCanvas, PADDING, 140, WIDTH - PADDING * 2, pictureHeight);
 
   let y = 140 + pictureHeight + 60;
-  ctx.font = `500 24px ${FONT}`;
+  ctx.font = `500 24px ${FONT_FAMILY}`;
   for (const line of content.lines) {
     ctx.fillText(line, PADDING, y);
     y += 36;
   }
 
   y += 30;
-  ctx.font = `700 24px ${FONT}`;
+  ctx.font = `700 24px ${FONT_FAMILY}`;
   ctx.fillText('気づいたこと', PADDING, y);
   y += 40;
-  ctx.font = `500 24px ${FONT}`;
+  ctx.font = `500 24px ${FONT_FAMILY}`;
   for (const line of reflectionLines) {
     ctx.fillText(line, PADDING, y);
     y += 36;

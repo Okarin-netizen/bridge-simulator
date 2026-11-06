@@ -1,16 +1,11 @@
 import type { Vehicle } from '../engine/crossing';
-import type { Guess } from '../game/prediction';
-import type { BridgeMember, BridgeNode, MemberResult } from '../engine/types';
+import { GRAVITY } from '../engine/materials';
+import type { BridgeMember, BridgeNode, FailureMode, MemberResult, Point, SectionId } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
+import type { Guess } from '../game/prediction';
 import type { Camera } from './camera';
-import { COLORS, MATERIAL_COLORS, forceColor } from './colors';
+import { COLORS, FONT_FAMILY, MATERIAL_COLORS, forceColor } from './colors';
 import type { BreakState } from './playback';
-import type { FailureMode, SectionId } from '../engine/types';
-
-export interface Point {
-  x: number;
-  y: number;
-}
 
 export interface Scene {
   design: BridgeDesign;
@@ -124,7 +119,7 @@ function isFalling(scene: Scene, member: BridgeMember): boolean {
 /** 部材の両はしを描く位置。落ちていく部材は、落ちたきょりの分だけ下げる */
 function drawnEndpoints(scene: Scene, member: BridgeMember): [Point, Point] {
   const fall = isFalling(scene, member) ? scene.test!.memberFallDistance : 0;
-  return endpoints(scene.design, member).map((node) => {
+  return scene.design.endsOf(member).map((node) => {
     const p = drawnPosition(scene, node);
     return { x: p.x, y: p.y - fall };
   }) as [Point, Point];
@@ -223,7 +218,7 @@ function strokeSection(ctx: CanvasRenderingContext2D, section: SectionId, color:
  */
 function drawSectionMarks(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   for (const member of scene.design.members) {
-    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    const [a, b] = scene.design.endsOf(member).map((p) => camera.toScreen(p.x, p.y));
     const length = Math.hypot(b.x - a.x, b.y - a.y);
     if (length < 50) continue;
 
@@ -365,7 +360,7 @@ function drawArrowHead(
 function drawLoadsAndReactions(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   const test = scene.test!;
   const { span, roadY } = scene.design.stage;
-  const weight = test.vehicle.mass * 9.81;
+  const weight = test.vehicle.mass * GRAVITY;
   // 軽自動車からトラックまで、矢印の長さで重さのちがいがわかるようにする
   const weightLength = 18 + 10 * Math.sqrt(test.vehicle.mass / 1000);
 
@@ -412,7 +407,7 @@ function drawArrow(ctx: CanvasRenderingContext2D, from: Point, to: Point, color:
 }
 
 function drawTag(ctx: CanvasRenderingContext2D, p: Point, text: string): void {
-  ctx.font = "700 12px 'M PLUS Rounded 1c', system-ui, sans-serif";
+  ctx.font = `700 12px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.ink;
   ctx.fillText(text, p.x, p.y);
 }
@@ -429,7 +424,7 @@ function drawBreakLabel(ctx: CanvasRenderingContext2D, camera: Camera, scene: Sc
   const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   const text = `ここからこわれた：${BREAK_LABELS[cause.mode]}`;
 
-  ctx.font = "700 14px 'M PLUS Rounded 1c', system-ui, sans-serif";
+  ctx.font = `700 14px ${FONT_FAMILY}`;
   const boxWidth = ctx.measureText(text).width + 20;
   const boxHeight = 30;
   const x = Math.max(8, Math.min(screenWidth - boxWidth - 8, mid.x - boxWidth / 2));
@@ -457,7 +452,7 @@ function drawGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
   for (const member of scene.design.members) {
     const guess = scene.guesses?.get(member.id);
     if (!guess) continue;
-    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    const [a, b] = scene.design.endsOf(member).map((p) => camera.toScreen(p.x, p.y));
     ctx.lineWidth = SECTION_STYLES[member.section].width + 6;
     ctx.strokeStyle = guess === 'compression' ? 'rgb(197, 58, 28)' : 'rgb(30, 64, 175)';
     ctx.globalAlpha = 0.55;
@@ -634,13 +629,7 @@ function deckShapeAt(scene: Scene, x: number): { dy: number; slope: number } {
 
 function drawDeflectionNote(ctx: CanvasRenderingContext2D, scale: number, screenHeight: number): void {
   if (scale <= 1) return;
-  ctx.font = "500 13px 'M PLUS Rounded 1c', system-ui, sans-serif";
+  ctx.font = `500 13px ${FONT_FAMILY}`;
   ctx.fillStyle = 'rgba(31, 42, 55, 0.75)';
   ctx.fillText(`たわみは ${scale} 倍に大きくして表示しています`, 12, screenHeight - 12);
-}
-
-export function endpoints(design: BridgeDesign, member: BridgeMember): [BridgeNode, BridgeNode] {
-  const a = design.nodes.find((n) => n.id === member.a)!;
-  const b = design.nodes.find((n) => n.id === member.b)!;
-  return [a, b];
 }
