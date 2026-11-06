@@ -1,4 +1,4 @@
-import { analyze } from './analyze';
+import { analyze, worstUtilization } from './analyze';
 import { GRAVITY } from './materials';
 import type { AnalysisResult, Bridge, BridgeMember, BridgeNode, FailureMode, NodeLoad } from './types';
 
@@ -72,7 +72,7 @@ export function simulateCrossing(bridge: Bridge, vehicle: Vehicle, options: Cros
     }
 
     outcome.frames.push({ position, result });
-    const worst = Math.max(0, ...result.members.map((m) => m.utilization));
+    const worst = worstUtilization(result.members);
     outcome.maxUtilization = Math.max(outcome.maxUtilization, worst);
 
     if (worst > 1) {

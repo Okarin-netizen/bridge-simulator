@@ -1,5 +1,11 @@
 // 構造計算で使う型。単位はすべて SI（m, N, Pa, kg）。y 軸は上向きが正。
 
+/** 平面上の点。橋の座標（m）にも画面の座標（px）にも使う */
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export type MaterialId = 'wood' | 'steel' | 'aluminum';
 export type SectionId = 'square' | 'pipe' | 'hbeam';
 

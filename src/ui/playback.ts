@@ -1,3 +1,4 @@
+import { worstUtilization } from '../engine/analyze';
 import type { CrossingOutcome } from '../engine/crossing';
 import { GRAVITY } from '../engine/materials';
 import type { FailureMode, MemberResult } from '../engine/types';
@@ -142,16 +143,13 @@ export class CrossingPlayback {
   /** 車が通ってきたあいだで、いちばん大きかった負担率 */
   get maxUtilizationSoFar(): number {
     const passed = this.outcome.frames.slice(0, this.frameIndex + 1);
-    return Math.max(0, ...passed.flatMap((frame) => frame.result.members.map((m) => m.utilization)));
+    return worstUtilization(passed.flatMap((frame) => frame.result.members));
   }
 
   /** 負担率がいちばん大きかった瞬間に車を止める */
   showHardestMoment(): void {
-    const worstOf = (members: MemberResult[]) => Math.max(0, ...members.map((m) => m.utilization));
-    let hardest = 0;
-    this.outcome.frames.forEach((frame, i) => {
-      if (worstOf(frame.result.members) > worstOf(this.outcome.frames[hardest].result.members)) hardest = i;
-    });
+    const worstAt = this.outcome.frames.map((frame) => worstUtilization(frame.result.members));
+    const hardest = worstAt.indexOf(Math.max(...worstAt));
     this.carX = this.firstX + hardest * this.step;
     this.phase = 'finished';
   }
@@ -165,7 +163,7 @@ export class CrossingPlayback {
     const exact = (this.carX - this.firstX) / this.step;
     const before = Math.max(0, Math.min(frames.length - 1, Math.floor(exact)));
     const after = Math.min(frames.length - 1, before + 1);
-    const t = Math.max(0, Math.min(1, exact - before));
+    const t = clamp01(exact - before);
     // 橋に乗る前とおりたあとは、たわみを少しずつ 0 にもどす
     const lastX = this.firstX + (frames.length - 1) * this.step;
     const outside = Math.max(this.firstX - this.carX, this.carX - lastX, 0);

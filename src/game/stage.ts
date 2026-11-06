@@ -210,3 +210,12 @@ export const SANDBOX_STAGE: Stage = defineStage({
   allowRigidJoints: true,
   lowAnchors: true,
 });
+
+export function isSandbox(stage: Stage): boolean {
+  return stage.id === SANDBOX_STAGE.id;
+}
+
+/** ステージを始めたときに出す説明（目標とヒント） */
+export function introText(stage: Stage): string {
+  return `${stage.goal}。${stage.hint}`;
+}
