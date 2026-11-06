@@ -631,5 +631,5 @@ function drawDeflectionNote(ctx: CanvasRenderingContext2D, scale: number, screen
   if (scale <= 1) return;
   ctx.font = `500 13px ${FONT_FAMILY}`;
   ctx.fillStyle = 'rgba(31, 42, 55, 0.75)';
-  ctx.fillText(`たわみは ${scale} 倍に大きくして表示しています`, 12, screenHeight - 12);
+  ctx.fillText(`橋のしずみ方（たわみ）は ${scale} 倍に大きくして見せています`, 12, screenHeight - 12);
 }

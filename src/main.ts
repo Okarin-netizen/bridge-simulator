@@ -13,10 +13,10 @@ import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
 import { MATERIAL_COLORS } from './ui/colors';
-import { tons, yen } from './ui/format';
 import { drawScene } from './ui/renderer';
 import { CrossingPlayback } from './ui/playback';
 import { saveReportImage } from './ui/report';
+import { forceText, tons, yen } from './ui/format';
 import { SECTION_ICONS } from './ui/sectionIcons';
 import type { Scene } from './ui/renderer';
 
@@ -25,7 +25,11 @@ type Tool = 'connect' | 'erase' | 'joint';
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: 'connect', label: 'つなぐ', hint: '点から点へなぞるか、2 つの点を順にタップして部材を置こう。' },
   { id: 'erase', label: 'けす', hint: 'けしたい部材か節点をタップしよう。' },
-  { id: 'joint', label: '接合をかえる', hint: '節点をタップすると、ピン接合（丸）と剛接合（四角）が切りかわるよ。' },
+  {
+    id: 'joint',
+    label: '接合をかえる',
+    hint: '節点をタップすると、ピン接合（丸）と剛接合（ごうせつごう：四角）が切りかわるよ。',
+  },
 ];
 
 let stage: Stage = STAGES[0];
@@ -78,7 +82,7 @@ const ctx = canvas.getContext('2d')!;
 function setupControls(): void {
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
   for (const vehicle of VEHICLES) {
-    vehicleSelect.add(new Option(`${vehicle.name}　${tons(vehicle.mass)}`, vehicle.id));
+    vehicleSelect.add(new Option(`${vehicle.name} ${tons(vehicle.mass)}`, vehicle.id));
   }
   vehicleSelect.value = state.vehicle.id;
   vehicleSelect.addEventListener('change', () => {
@@ -167,6 +171,7 @@ function openStage(next: Stage): void {
   $('budget').textContent = yen(stage.budget);
   $('hint').textContent = introText(stage);
   $('load-sample').hidden = !isSandbox(stage);
+  $('legend-rigid').hidden = !stage.allowRigidJoints;
 
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
   if (stage.vehicleId) {
@@ -202,11 +207,13 @@ function starText(count: number): string {
 }
 
 function renderChoiceButtons(): void {
+  // 強さは MPa だとなじみがないので、断面の曲がりにくさと同じく、木材を 1 としたときの何倍かで見せる
+  const strengthOf = (id: MaterialId) => Math.round(MATERIALS[id].strength / MATERIALS.wood.strength);
   $('materials').replaceChildren(
     ...stage.materials.map((id) => MATERIALS[id]).map((material) =>
       choiceButton(
         `<span class="material-swatch" style="background:${MATERIAL_COLORS[material.id]}"></span>${material.name}` +
-          `<small>強さ ${material.strength / 1e6} MPa<br>¥${material.pricePerMeter}/m</small>`,
+          `<small>強さ ×${strengthOf(material.id)}<br>1 m ${yen(material.pricePerMeter)}</small>`,
         state.material === material.id,
         () => {
           state.material = material.id;
@@ -427,6 +434,7 @@ function startTest(): void {
   state.test = test;
   $('run-test').textContent = '橋を直す';
   $('hint').textContent = '車が橋をわたっているよ。部材の色と矢印の変わり方を見てみよう。';
+  $('mode-badge').textContent = '試験中';
   $('mode-badge').hidden = false;
   $<HTMLButtonElement>('predict').disabled = true;
   requestAnimationFrame((now) => playAnimation(test, now));
@@ -458,6 +466,7 @@ function finishTest(test: TestPlayback): void {
     test.playback.showHardestMoment();
     showToast('いちばん苦しかった瞬間を表示しています');
   }
+  $('mode-badge').textContent = '試験の結果';
   $('hint').textContent = '部材をタップすると、押されているか引っぱられているかと、力の大きさがわかるよ。';
   refresh();
 }
@@ -569,7 +578,7 @@ function updateMemberInfo(): void {
   if (result) {
     lines.push(
       modeLabel(result.axial),
-      `軸の力 <b>${(Math.abs(result.axial) / 1000).toFixed(1)} kN</b>`,
+      `かかる力 <b>${forceText(result.axial)}</b>`,
       `負担率 <b>${utilizationPercent(result.utilization)}%</b>`,
     );
   }
