@@ -319,9 +319,33 @@ canvas {
   margin-bottom: 8px;
 }
 
+.legend-row[hidden] {
+  display: none;
+}
+
 .legend-note {
   font-size: 13px;
   color: var(--muted);
+}
+
+.legend hr {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.legend-icon {
+  width: 36px;
+  height: 30px;
+  flex-shrink: 0;
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+.legend-icon .fill {
+  fill: var(--ink);
+  stroke: none;
 }
 
 .arrow-sample {
@@ -710,7 +734,6 @@ canvas {
   .stage-title,
   .badge,
   .spacer,
-  .budget-label > :first-child,
   .vehicle > span {
     display: none;
   }
@@ -726,7 +749,9 @@ canvas {
     width: auto;
   }
 
+  /* 金額だけだと何の数字かわからないので、見出しは金額の上に小さく出す */
   .budget-label {
+    flex-direction: column;
     margin-bottom: 3px;
     font-size: 11px;
   }
@@ -772,6 +797,7 @@ canvas {
   }
 
   .drawer-toggle small {
+    white-space: normal;
     font-size: 10px;
     font-weight: 500;
     line-height: 1.3;
