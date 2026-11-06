@@ -16,6 +16,7 @@ import { MATERIAL_COLORS } from './ui/colors';
 import { drawScene, endpoints } from './ui/renderer';
 import { CrossingPlayback } from './ui/playback';
 import { saveReportImage } from './ui/report';
+import { SECTION_ICONS } from './ui/sectionIcons';
 import type { Point, Scene } from './ui/renderer';
 
 type Tool = 'connect' | 'erase' | 'joint';
@@ -182,12 +183,20 @@ function renderChoiceButtons(): void {
     ),
   );
 
+  // 曲がりにくさは、角材を 1 としたときの何倍かで見せる
+  const stiffnessOf = (id: SectionId) => Math.round(SECTIONS[id].I / SECTIONS.square.I);
   $('sections').replaceChildren(
     ...stage.sections.map((id) => SECTIONS[id]).map((section) =>
-      choiceButton(section.name, state.section === section.id, () => {
-        state.section = section.id;
-        renderChoiceButtons();
-      }),
+      choiceButton(
+        `<span class="section-icon">${SECTION_ICONS[section.id]}</span>${section.name}` +
+          `<small>曲がりにくさ ×${stiffnessOf(section.id)}・値段 ×${section.priceFactor}</small>`,
+        state.section === section.id,
+        () => {
+          state.section = section.id;
+          renderChoiceButtons();
+        },
+        'choice',
+      ),
     ),
   );
 

@@ -5,7 +5,7 @@ import type { BridgeDesign } from '../game/design';
 import type { Camera } from './camera';
 import { COLORS, MATERIAL_COLORS, forceColor } from './colors';
 import type { BreakState } from './playback';
-import type { FailureMode } from '../engine/types';
+import type { FailureMode, SectionId } from '../engine/types';
 
 export interface Point {
   x: number;
@@ -64,6 +64,13 @@ const BREAK_LABELS: Record<FailureMode, string> = {
 const ARROW_MIN_UTILIZATION = 0.15;
 
 const MEMBER_WIDTH = 7;
+
+/** 断面ごとの線の太さ（px）。hollow は中の白い線の太さ、web は H 形のまん中の線 */
+const SECTION_STYLES: Record<SectionId, { width: number; hollow: number; web: boolean }> = {
+  square: { width: 6, hollow: 0, web: false },
+  pipe: { width: 11, hollow: 5, web: false },
+  hbeam: { width: 16, hollow: 11, web: true },
+};
 const NODE_RADIUS = 6;
 
 export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
@@ -75,6 +82,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   drawTerrain(ctx, camera, scene.design, { width, height });
   drawMembers(ctx, camera, scene);
   if (!scene.test) drawGuesses(ctx, camera, scene);
+  if (!scene.test) drawSectionMarks(ctx, camera, scene);
   if (scene.test) drawForceArrows(ctx, camera, scene);
   drawNodes(ctx, camera, scene);
   if (scene.test) drawWrongGuesses(ctx, camera, scene);
@@ -166,8 +174,6 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
 
     // 落ちていく部材は、だんだんうすくする
     ctx.globalAlpha = isFalling(scene, member) ? Math.max(0.25, 1 - scene.test!.memberFallDistance / 8) : 1;
-    ctx.lineWidth = MEMBER_WIDTH;
-    ctx.strokeStyle = memberColor(member, scene);
     ctx.beginPath();
     if (breaking) {
       traceBrokenMember(ctx, a, b, breaking);
@@ -175,15 +181,68 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
     }
-    ctx.stroke();
+    strokeSection(ctx, member.section, memberColor(member, scene));
 
     if (member.id === scene.selectedMemberId) {
-      ctx.lineWidth = MEMBER_WIDTH + 8;
+      ctx.lineWidth = SECTION_STYLES[member.section].width + 10;
       ctx.strokeStyle = 'rgba(31, 42, 55, 0.25)';
       ctx.stroke();
     }
   }
   ctx.globalAlpha = 1;
+}
+
+/**
+ * 断面のちがいが見てわかるよう、部材の線の描き方を変える。
+ * 角材は細い 1 本の線、パイプは中が空いた太い線、H 形はいちばん太く、まん中に縦の板（ウェブ）の線を入れる。
+ */
+function strokeSection(ctx: CanvasRenderingContext2D, section: SectionId, color: string): void {
+  const style = SECTION_STYLES[section];
+  ctx.strokeStyle = color;
+  ctx.lineWidth = style.width;
+  ctx.stroke();
+  if (style.hollow > 0) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.lineWidth = style.hollow;
+    ctx.stroke();
+  }
+  if (style.web) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+}
+
+/** 組み立て中は、部材のまん中に切り口の形の印（■ ○ H）をつけて、どの断面かをはっきりさせる */
+function drawSectionMarks(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  for (const member of scene.design.members) {
+    const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 50) continue;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(mid.x, mid.y, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = COLORS.ink;
+    ctx.strokeStyle = COLORS.ink;
+    ctx.beginPath();
+    if (member.section === 'square') {
+      ctx.fillRect(mid.x - 4.5, mid.y - 4.5, 9, 9);
+    } else if (member.section === 'pipe') {
+      ctx.lineWidth = 2.5;
+      ctx.arc(mid.x, mid.y, 5, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.fillRect(mid.x - 5.5, mid.y - 6, 11, 2.5);
+      ctx.fillRect(mid.x - 5.5, mid.y + 3.5, 11, 2.5);
+      ctx.fillRect(mid.x - 1.25, mid.y - 6, 2.5, 12);
+    }
+  }
 }
 
 /**
@@ -387,7 +446,7 @@ function drawGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
     const guess = scene.guesses?.get(member.id);
     if (!guess) continue;
     const [a, b] = endpoints(scene.design, member).map((p) => camera.toScreen(p.x, p.y));
-    ctx.lineWidth = MEMBER_WIDTH + 6;
+    ctx.lineWidth = SECTION_STYLES[member.section].width + 6;
     ctx.strokeStyle = guess === 'compression' ? 'rgb(197, 58, 28)' : 'rgb(30, 64, 175)';
     ctx.globalAlpha = 0.55;
     ctx.beginPath();
