@@ -50,12 +50,12 @@ describe('走行試験のアニメーション', () => {
     expect(worst).toBeCloseTo(outcome.maxUtilization);
   });
 
-  it('こわれたときは、落ちる様子を見せてから終わる', () => {
+  it('こわれたときは、部材がこわれる様子と落ちる様子を見せてから終わる', () => {
     const outcome = simulateCrossing(triangleBridge(), truck, { roadY: 0 });
     expect(outcome.status).toBe('collapsed');
 
     const playback = new CrossingPlayback(outcome);
-    expect(playToEnd(playback)).toEqual(['driving', 'falling', 'finished']);
+    expect(playToEnd(playback)).toEqual(['driving', 'breaking', 'falling', 'finished']);
     expect(playback.carX).toBeCloseTo(outcome.stoppedAt!);
     expect(playback.fallDistance).toBeGreaterThan(5);
   });
@@ -69,5 +69,35 @@ describe('走行試験のアニメーション', () => {
     const largest = Math.max(...[...playback.drawnDisplacements().values()].map((d) => Math.hypot(d.dx, d.dy)));
     expect(largest).toBeGreaterThan(0.05);
     expect(largest).toBeLessThanOrEqual(1.5);
+  });
+
+  it('部材は、最初にこわれた部材から順番にこわれていく', () => {
+    const outcome = simulateCrossing(triangleBridge(), truck, { roadY: 0 });
+    const playback = new CrossingPlayback(outcome);
+    while (playback.phase === 'driving') playback.advance(1 / 60);
+    expect(playback.breakStates).toEqual([]);
+
+    playback.advance(0.25);
+    const [cause] = playback.breakStates;
+    expect(playback.breakStates).toHaveLength(1);
+    expect(cause.id).toBe(outcome.broken[0].id);
+    expect(cause.isCause).toBe(true);
+    expect(cause.progress).toBeGreaterThan(0);
+    expect(cause.progress).toBeLessThan(1);
+
+    playToEnd(playback);
+    expect(playback.breakStates.map((state) => state.id)).toEqual(outcome.broken.map((b) => b.id));
+    expect(playback.breakStates.every((state) => state.progress === 1)).toBe(true);
+  });
+
+  it('車の重さの矢印は、橋の上を走っているあいだと、わたり切ったあとに出す', () => {
+    const crossed = new CrossingPlayback(simulateCrossing(triangleBridge(), kei, { roadY: 0 }));
+    expect(crossed.showsLoads).toBe(true);
+    playToEnd(crossed);
+    expect(crossed.showsLoads).toBe(true);
+
+    const collapsed = new CrossingPlayback(simulateCrossing(triangleBridge(), truck, { roadY: 0 }));
+    playToEnd(collapsed);
+    expect(collapsed.showsLoads).toBe(false);
   });
 });

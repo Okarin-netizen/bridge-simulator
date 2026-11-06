@@ -4,6 +4,8 @@ import type { BridgeMember, BridgeNode, MemberResult } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
 import type { Camera } from './camera';
 import { COLORS, MATERIAL_COLORS, forceColor } from './colors';
+import type { BreakState } from './playback';
+import type { FailureMode } from '../engine/types';
 
 export interface Point {
   x: number;
@@ -41,8 +43,25 @@ export interface Scene {
     wholeBridgeFalls: boolean;
     /** 車も落ちるか */
     carFalls: boolean;
+    /** こわれていく部材（こわれた順） */
+    breaks: BreakState[];
+    /** 支点が橋を支えている力（N） */
+    reactions: Map<string, { rx: number; ry: number }>;
+    /** 車の重さと支える力の矢印を出すか */
+    showLoads: boolean;
   };
 }
+
+/** 吹き出しに書く、こわれ方 */
+const BREAK_LABELS: Record<FailureMode, string> = {
+  buckling: '押されて横に曲がった（座屈）',
+  tension: '引っぱられてちぎれた',
+  compression: '押されてつぶれた',
+  bending: '曲げられて折れた',
+};
+
+/** 力の矢印を出す負担率の下限。小さな力まで出すと、矢印だらけで見にくくなる */
+const ARROW_MIN_UTILIZATION = 0.15;
 
 const MEMBER_WIDTH = 7;
 const NODE_RADIUS = 6;
@@ -56,14 +75,17 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   drawTerrain(ctx, camera, scene.design, { width, height });
   drawMembers(ctx, camera, scene);
   if (!scene.test) drawGuesses(ctx, camera, scene);
+  if (scene.test) drawForceArrows(ctx, camera, scene);
   drawNodes(ctx, camera, scene);
   if (scene.test) drawWrongGuesses(ctx, camera, scene);
+  if (scene.test?.showLoads) drawLoadsAndReactions(ctx, camera, scene);
 
   if (scene.preview) drawPreview(ctx, camera, scene.preview);
   if (scene.pending) drawRing(ctx, camera.toScreen(scene.pending.x, scene.pending.y), COLORS.accent);
   if (scene.test) {
     drawCar(ctx, camera, scene);
     drawDeflectionNote(ctx, scene.test.deflectionScale, height);
+    drawBreakLabel(ctx, camera, scene, width);
   }
 
   const unstableNode = scene.design.nodes.find((n) => n.id === scene.test?.unstableNodeId);
@@ -140,16 +162,19 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
   ctx.lineCap = 'round';
   for (const member of scene.design.members) {
     const [a, b] = drawnEndpoints(scene, member).map((p) => camera.toScreen(p.x, p.y));
-    const broken = scene.test?.brokenIds.has(member.id) ?? false;
+    const breaking = scene.test?.breaks.find((state) => state.id === member.id);
 
     // 落ちていく部材は、だんだんうすくする
     ctx.globalAlpha = isFalling(scene, member) ? Math.max(0.25, 1 - scene.test!.memberFallDistance / 8) : 1;
     ctx.lineWidth = MEMBER_WIDTH;
     ctx.strokeStyle = memberColor(member, scene);
-    ctx.setLineDash(broken ? [6, 6] : []);
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    if (breaking) {
+      traceBrokenMember(ctx, a, b, breaking);
+    } else {
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
     ctx.stroke();
 
     if (member.id === scene.selectedMemberId) {
@@ -159,7 +184,202 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
     }
   }
   ctx.globalAlpha = 1;
-  ctx.setLineDash([]);
+}
+
+/**
+ * こわれ方に合わせて、部材の形を変えて描く（progress が 0 → 1 で形が変わっていく）。
+ * 座屈は横にふくらみ、引張はまん中でちぎれ、圧縮はまん中がつぶれ、曲げはまん中で折れる。
+ */
+function traceBrokenMember(ctx: CanvasRenderingContext2D, a: Point, b: Point, state: BreakState): void {
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const along = { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
+  // 部材に直角な向き。折れるときは下に曲がって見えるよう、画面の下向きにそろえる
+  let side = { x: -along.y, y: along.x };
+  if (side.y < 0) side = { x: -side.x, y: -side.y };
+  const at = (t: number, offset = 0): Point => ({
+    x: a.x + (b.x - a.x) * t + side.x * offset,
+    y: a.y + (b.y - a.y) * t + side.y * offset,
+  });
+  const p = state.progress;
+
+  switch (state.mode) {
+    case 'buckling': {
+      const bulge = at(0.5, p * 0.35 * length);
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(bulge.x, bulge.y, b.x, b.y);
+      break;
+    }
+    case 'tension': {
+      const gap = p * 0.12;
+      const left = at(0.5 - gap);
+      const right = at(0.5 + gap);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(left.x, left.y);
+      ctx.moveTo(right.x, right.y);
+      ctx.lineTo(b.x, b.y);
+      break;
+    }
+    case 'compression': {
+      const amplitude = p * 0.06 * length;
+      ctx.moveTo(a.x, a.y);
+      [0.38, 0.44, 0.5, 0.56, 0.62].forEach((t, i) => {
+        const point = at(t, i % 2 === 0 ? amplitude : -amplitude);
+        ctx.lineTo(point.x, point.y);
+      });
+      ctx.lineTo(b.x, b.y);
+      break;
+    }
+    case 'bending': {
+      const kink = at(0.5, p * 0.15 * length);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(kink.x, kink.y);
+      ctx.lineTo(b.x, b.y);
+      break;
+    }
+  }
+}
+
+/**
+ * 部材にかかる力の向きを矢印で示す。
+ * 押される部材は両はしから内向き（→ ←）、引っぱられる部材は外向き（← →）。力が大きいほど大きな矢印にする。
+ */
+function drawForceArrows(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  const test = scene.test!;
+  for (const member of scene.design.members) {
+    const result = test.results.get(member.id);
+    if (!result || result.utilization < ARROW_MIN_UTILIZATION) continue;
+    if (test.brokenIds.has(member.id) || isFalling(scene, member)) continue;
+
+    const [a, b] = drawnEndpoints(scene, member).map((p) => camera.toScreen(p.x, p.y));
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 40) continue;
+    const along = { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
+    const size = 9 + 9 * Math.min(result.utilization, 1);
+    const pulled = result.axial >= 0;
+
+    for (const [t, outward] of [
+      [0.22, -1],
+      [0.78, 1],
+    ] as const) {
+      const tip = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      // 引っぱられる部材は矢印をはしへ、押される部材はまん中へ向ける
+      const direction = pulled ? outward : -outward;
+      drawArrowHead(ctx, tip, { x: along.x * direction, y: along.y * direction }, size, forceColor(result.axial, 1));
+    }
+  }
+}
+
+function drawArrowHead(
+  ctx: CanvasRenderingContext2D,
+  tip: Point,
+  direction: Point,
+  size: number,
+  color: string,
+): void {
+  const back = { x: tip.x - direction.x * size, y: tip.y - direction.y * size };
+  const side = { x: -direction.y * size * 0.6, y: direction.x * size * 0.6 };
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(back.x + side.x, back.y + side.y);
+  ctx.lineTo(back.x - side.x, back.y - side.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+/** 車の重さ（下向き）と、岸が橋を支える力（上向き）を矢印で示す */
+function drawLoadsAndReactions(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+  const test = scene.test!;
+  const { span, roadY } = scene.design.stage;
+  const weight = test.vehicle.mass * 9.81;
+  // 軽自動車からトラックまで、矢印の長さで重さのちがいがわかるようにする
+  const weightLength = 18 + 10 * Math.sqrt(test.vehicle.mass / 1000);
+
+  const axles = [test.carPosition - test.vehicle.wheelbase / 2, test.carPosition + test.vehicle.wheelbase / 2];
+  const onBridge = axles.filter((x) => x > 0 && x < span);
+  onBridge.forEach((x, i) => {
+    const deck = deckShapeAt(scene, x);
+    const top = camera.toScreen(x, roadY + deck.dy);
+    drawArrow(ctx, top, { x: top.x, y: top.y + weightLength }, COLORS.ink);
+    if (i === 0) drawTag(ctx, { x: top.x + 8, y: top.y + weightLength + 4 }, '車の重さ');
+  });
+
+  const totalUp = [...test.reactions.values()].reduce((sum, r) => sum + Math.max(0, r.ry), 0);
+  if (totalUp <= 0) return;
+  let labeled = false;
+  for (const node of scene.design.nodes) {
+    const reaction = test.reactions.get(node.id);
+    if (!node.support || !reaction || reaction.ry <= 0) continue;
+    // 支える力の合計は、車と橋の重さの合計と同じになる。合計に対する割合で長さを決める
+    const length = 14 + 46 * (reaction.ry / Math.max(totalUp, weight));
+    const p = drawnPosition(scene, node);
+    const head = camera.toScreen(p.x, p.y);
+    const headBelowSupport = { x: head.x, y: head.y + 22 };
+    drawArrow(ctx, { x: head.x, y: headBelowSupport.y + length }, headBelowSupport, COLORS.accent);
+    if (!labeled) {
+      drawTag(ctx, { x: head.x + 8, y: headBelowSupport.y + length }, '支える力');
+      labeled = true;
+    }
+  }
+}
+
+function drawArrow(ctx: CanvasRenderingContext2D, from: Point, to: Point, color: string): void {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  const direction = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x - direction.x * 8, to.y - direction.y * 8);
+  ctx.stroke();
+  ctx.lineCap = 'round';
+  drawArrowHead(ctx, to, direction, 12, color);
+}
+
+function drawTag(ctx: CanvasRenderingContext2D, p: Point, text: string): void {
+  ctx.font = "700 12px 'M PLUS Rounded 1c', system-ui, sans-serif";
+  ctx.fillStyle = COLORS.ink;
+  ctx.fillText(text, p.x, p.y);
+}
+
+/** 最初にこわれた部材に「ここからこわれた」の吹き出しをつける */
+function drawBreakLabel(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene, screenWidth: number): void {
+  const test = scene.test!;
+  const cause = test.breaks.find((state) => state.isCause);
+  if (!cause || test.memberFallDistance > 0) return;
+  const member = scene.design.members.find((m) => m.id === cause.id);
+  if (!member) return;
+
+  const [a, b] = drawnEndpoints(scene, member).map((p) => camera.toScreen(p.x, p.y));
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const text = `ここからこわれた：${BREAK_LABELS[cause.mode]}`;
+
+  ctx.font = "700 14px 'M PLUS Rounded 1c', system-ui, sans-serif";
+  const boxWidth = ctx.measureText(text).width + 20;
+  const boxHeight = 30;
+  const x = Math.max(8, Math.min(screenWidth - boxWidth - 8, mid.x - boxWidth / 2));
+  // 部材のいちばん上より、さらに上に出す（車と重ならないように）
+  const y = Math.max(8, Math.min(a.y, b.y) - 60);
+
+  ctx.globalAlpha = Math.min(1, cause.progress * 2);
+  ctx.strokeStyle = COLORS.broken;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(mid.x, mid.y);
+  ctx.lineTo(Math.max(x + 12, Math.min(x + boxWidth - 12, mid.x)), y + boxHeight);
+  ctx.stroke();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.roundRect(x, y, boxWidth, boxHeight, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = COLORS.broken;
+  ctx.fillText(text, x + 10, y + 20);
+  ctx.globalAlpha = 1;
 }
 
 function drawGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
