@@ -17,6 +17,7 @@ import { $, choiceButton, showToast } from './ui/dom';
 import { tons, yen } from './ui/format';
 import { findMemberNear, findNodeNear, hitRadiusFor, samePoint } from './ui/hitTest';
 import type { HitRadius } from './ui/hitTest';
+import { drawLoupe } from './ui/loupe';
 import { CrossingPlayback } from './ui/playback';
 import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
@@ -47,6 +48,8 @@ const state = {
   vehicle: VEHICLES[1] as Vehicle,
   dragFrom: null as Point | null,
   pointer: null as Point | null,
+  /** 指でなぞっているときの指先の位置（画面の px）。ルーペを出すのに使う */
+  finger: null as Point | null,
   pending: null as Point | null,
   selectedMemberId: null as string | null,
   test: null as TestPlayback | null,
@@ -294,6 +297,7 @@ canvas.addEventListener('pointerdown', (event) => {
     canvas.setPointerCapture(event.pointerId);
     state.dragFrom = state.pending ?? snapToGrid(screen.x, screen.y);
     state.pointer = snapToGrid(screen.x, screen.y);
+    state.finger = event.pointerType === 'touch' ? screen : null;
   } else if (state.tool === 'erase') {
     eraseAt(screen, hit);
   } else if (state.tool === 'joint') {
@@ -307,6 +311,7 @@ canvas.addEventListener('pointermove', (event) => {
   if (!state.dragFrom || !event.isPrimary) return;
   const screen = pointerPosition(event);
   state.pointer = snapToGrid(screen.x, screen.y);
+  if (state.finger) state.finger = screen;
   draw();
 });
 
@@ -317,6 +322,7 @@ canvas.addEventListener('pointerup', (event) => {
   const start = state.dragFrom;
   state.dragFrom = null;
   state.pointer = null;
+  state.finger = null;
 
   if (samePoint(start, end)) {
     // その場でタップしたときは、次のタップでつなぐ
@@ -333,6 +339,7 @@ canvas.addEventListener('pointerup', (event) => {
 canvas.addEventListener('pointercancel', () => {
   state.dragFrom = null;
   state.pointer = null;
+  state.finger = null;
   draw();
 });
 
@@ -460,6 +467,10 @@ function draw(): void {
     scene.preview = { from: state.dragFrom, to: state.pointer, valid: length <= stage.maxMemberLength };
   }
   drawScene(ctx, camera, scene);
+
+  if (state.finger && state.pointer) {
+    drawLoupe(ctx, camera.toScreen(state.pointer.x, state.pointer.y), state.finger);
+  }
 }
 
 function updateCost(): void {
