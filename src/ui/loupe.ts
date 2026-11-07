@@ -1,5 +1,5 @@
 import type { Point } from '../engine/types';
-import { COLORS } from './colors';
+import { COLORS, FONT_FAMILY } from './colors';
 
 // 指でなぞっていると、指先が隠れて部材のはしがどこに付くのか見えない。
 // そこで、指の少し上に「ルーペ」を出して、指の下を拡大して見せる。
@@ -8,11 +8,17 @@ const RADIUS = 56; // ルーペの半径（px）
 const ZOOM = 1.8;
 const LIFT = 100; // 指先からどれだけはなして出すか（px）
 
+/** ルーペの下に出す一言（部材の長さなど）。ok が false なら赤で出す */
+export interface LoupeLabel {
+  text: string;
+  ok: boolean;
+}
+
 /**
  * target（部材のはしが付く点）のまわりを拡大して、finger（指先）の上に描く。
  * キャンバスに描き終わったあとに呼ぶ。
  */
-export function drawLoupe(ctx: CanvasRenderingContext2D, target: Point, finger: Point): void {
+export function drawLoupe(ctx: CanvasRenderingContext2D, target: Point, finger: Point, label?: LoupeLabel): void {
   const canvas = ctx.canvas;
   const width = canvas.clientWidth;
   const center = loupeCenter(finger, width);
@@ -46,6 +52,25 @@ export function drawLoupe(ctx: CanvasRenderingContext2D, target: Point, finger: 
   ctx.lineWidth = 3;
   ctx.strokeStyle = COLORS.ink;
   ctx.stroke();
+
+  if (label) drawLabel(ctx, center, label);
+}
+
+/** ルーペの下のふちに、黒（だめなときは赤）の札で一言を書く */
+function drawLabel(ctx: CanvasRenderingContext2D, center: Point, label: LoupeLabel): void {
+  ctx.save();
+  ctx.font = `bold 13px ${FONT_FAMILY}`;
+  const width = ctx.measureText(label.text).width + 16;
+  const y = center.y + RADIUS - 2;
+  ctx.fillStyle = label.ok ? COLORS.ink : COLORS.broken;
+  ctx.beginPath();
+  ctx.roundRect(center.x - width / 2, y - 11, width, 22, 11);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label.text, center.x, y + 1);
+  ctx.restore();
 }
 
 /** ふだんは指の真上。上にはみ出すときは、画面の中央に寄せて横に出す */

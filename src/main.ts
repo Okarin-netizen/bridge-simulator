@@ -18,24 +18,23 @@ import { tons, yen } from './ui/format';
 import { findMemberNear, findNodeNear, hitRadiusFor, samePoint } from './ui/hitTest';
 import type { HitRadius } from './ui/hitTest';
 import { drawLoupe } from './ui/loupe';
+import type { LoupeLabel } from './ui/loupe';
 import { CrossingPlayback } from './ui/playback';
 import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
 import { memberInfoHtml, reflectionForm, resultHtml, starText } from './ui/resultPanel';
+import { memberCard, nodeCard } from './ui/selectCard';
 
-type Tool = 'connect' | 'change' | 'erase' | 'joint';
+/** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
+const TAP_SLOP = { mouse: 6, touch: 12 };
 
-const TOOLS: { id: Tool; label: string; hint: string }[] = [
-  { id: 'connect', label: 'つなぐ', hint: '点から点へなぞるか、2 つの点を順にタップして部材を置こう。' },
-  { id: 'change', label: '材料をかえる', hint: '部材をタップすると、いま選んでいる材料と断面にかわるよ。' },
-  { id: 'erase', label: 'けす', hint: 'けしたい部材か節点をタップしよう。' },
-  {
-    id: 'joint',
-    label: '接合をかえる',
-    hint: '節点をタップすると、ピン接合（丸）と剛接合（ごうせつごう：四角）が切りかわるよ。',
-  },
-];
+interface Press {
+  /** 押し始めた所（画面の px） */
+  screen: Point;
+  hit: HitRadius;
+  touch: boolean;
+}
 
 let stage: Stage = STAGES[0];
 let design = new BridgeDesign(stage);
@@ -43,16 +42,19 @@ const camera = new Camera();
 const progress = new Progress();
 
 const state = {
-  tool: 'connect' as Tool,
   material: 'wood' as MaterialId,
   section: 'square' as SectionId,
   vehicle: VEHICLES[1] as Vehicle,
+  /** 画面を押しているあいだの、押し始めた所。はなしたときに「タップ＝選ぶ」か「なぞる＝置く」かを決める */
+  press: null as Press | null,
   dragFrom: null as Point | null,
   pointer: null as Point | null,
   /** 指でなぞっているときの指先の位置（画面の px）。ルーペを出すのに使う */
   finger: null as Point | null,
-  pending: null as Point | null,
+  /** タップで選んだ部材。試験の結果では、力を見る部材にもなる */
   selectedMemberId: null as string | null,
+  /** タップで選んだ節点 */
+  selectedNodeId: null as string | null,
   test: null as TestPlayback | null,
   /** 試験の前に、部材の力の向きを予想しているところか */
   predicting: false,
@@ -102,6 +104,14 @@ function setupControls(): void {
       event.preventDefault();
       undo();
     }
+    // 選んだ部材や節点は、キーボードでもけしたり、選ぶのをやめたりできる
+    if (state.test || isTyping(event) || choosingStage || !hasSelection()) return;
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      deleteSelected();
+    } else if (event.key === 'Escape') {
+      closeSelectCard();
+    }
   });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
   $('predict').addEventListener('click', () => setPredicting(!state.predicting));
@@ -130,10 +140,10 @@ function undo(): void {
   if (design.canUndo) changeDesign(() => design.undo());
 }
 
-/** ボタンで橋をまとめて変える。タップしかけていた点も、前の形のものなので忘れる */
+/** ボタンで橋をまとめて変える。選んでいた部材や節点も、前の形のものなので選びなおし */
 function changeDesign(change: () => void): void {
   leaveTest();
-  state.pending = null;
+  clearSelection();
   change();
   refresh();
 }
@@ -145,7 +155,7 @@ function isTyping(event: KeyboardEvent): boolean {
 
 function setPredicting(on: boolean): void {
   state.predicting = on;
-  state.pending = null;
+  clearSelection();
   $('predict').setAttribute('aria-pressed', String(on));
   $('hint').textContent = on
     ? '部材をタップして予想しよう。1 回で赤（押される）、2 回で青（引っぱられる）、3 回でもとにもどるよ。'
@@ -159,8 +169,7 @@ function openStage(next: Stage): void {
   design = new BridgeDesign(stage);
   state.material = stage.materials[0];
   state.section = stage.sections[0];
-  state.tool = 'connect';
-  state.pending = null;
+  clearSelection();
   state.guesses.clear();
   state.reflection = '';
   setPredicting(false);
@@ -207,23 +216,7 @@ function renderChoiceButtons(): void {
       renderChoiceButtons();
     }),
   );
-
-  const toolLabel = TOOLS.find((tool) => tool.id === state.tool)!.label;
-  $('tools-summary').textContent = `${MATERIALS[state.material].name}・${SECTIONS[state.section].name}・${toolLabel}`;
-
-  $('tools').replaceChildren(
-    ...TOOLS.filter((tool) => tool.id !== 'joint' || stage.allowRigidJoints).map((tool) =>
-      choiceButton(tool.label, state.tool === tool.id, () => {
-        // 試験の結果を見ているときに道具を選んだら、橋を直しにもどる
-        leaveTest();
-        state.tool = tool.id;
-        state.pending = null;
-        $('hint').textContent = tool.hint;
-        renderChoiceButtons();
-        draw();
-      }),
-    ),
-  );
+  $('tools-summary').textContent = `${MATERIALS[state.material].name}・${SECTIONS[state.section].name}`;
 }
 
 function resizeCanvas(): void {
@@ -266,7 +259,7 @@ canvas.addEventListener('pointerdown', (event) => {
   const screen = pointerPosition(event);
   const hit = hitRadiusFor(event);
 
-  // 材料と道具の引き出しは、橋の画面にさわったら閉じる（そのタップで部材は置かない）
+  // 材料の引き出しは、橋の画面にさわったら閉じる（そのタップでは何もしない）
   if (openedDrawer() === 'tools') {
     closeDrawer();
     return;
@@ -294,73 +287,139 @@ canvas.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  if (state.tool === 'connect') {
-    canvas.setPointerCapture(event.pointerId);
-    state.dragFrom = state.pending ?? snapToGrid(screen.x, screen.y);
-    state.pointer = snapToGrid(screen.x, screen.y);
-    state.finger = event.pointerType === 'touch' ? screen : null;
-  } else if (state.tool === 'change') {
-    changeMaterialAt(screen, hit);
-  } else if (state.tool === 'erase') {
-    eraseAt(screen, hit);
-  } else if (state.tool === 'joint') {
-    const node = findNodeNear(design, camera, screen, hit);
-    if (node) design.toggleJoint(node.id);
-  }
-  refresh();
+  // 「タップ＝選ぶ」「なぞる＝置く」。どちらになるかは、指をはなしたときに決める
+  canvas.setPointerCapture(event.pointerId);
+  const touch = event.pointerType === 'touch';
+  state.press = { screen, hit, touch };
+  state.dragFrom = snapPoint(screen, state.press);
+  state.pointer = state.dragFrom;
+  state.finger = touch ? screen : null;
+  draw();
 });
 
 canvas.addEventListener('pointermove', (event) => {
-  if (!state.dragFrom || !event.isPrimary) return;
+  if (!state.press || !event.isPrimary) return;
   const screen = pointerPosition(event);
-  state.pointer = snapToGrid(screen.x, screen.y);
+  state.pointer = snapPoint(screen, state.press);
   if (state.finger) state.finger = screen;
   draw();
 });
 
 canvas.addEventListener('pointerup', (event) => {
-  if (!state.dragFrom || !event.isPrimary) return;
+  if (!state.press || !state.dragFrom || !event.isPrimary) return;
   const screen = pointerPosition(event);
-  const end = snapToGrid(screen.x, screen.y);
+  const press = state.press;
   const start = state.dragFrom;
-  state.dragFrom = null;
-  state.pointer = null;
-  state.finger = null;
+  const end = snapPoint(screen, press);
+  endPress();
 
-  if (samePoint(start, end)) {
-    // その場でタップしたときは、次のタップでつなぐ
-    state.pending = state.pending && samePoint(state.pending, end) ? null : end;
+  if (isTap(press, screen, start, end)) {
+    selectAt(press.screen, press.hit);
   } else {
-    const problem = design.connect(start, end, state.material, state.section);
-    if (problem) showToast(problem);
-    state.pending = null;
+    placeMember(start, end);
   }
   refresh();
 });
 
 // 画面のスクロールや通知などで指の動きが取り消されたら、置きかけの部材もやめる
 canvas.addEventListener('pointercancel', () => {
-  state.dragFrom = null;
-  state.pointer = null;
-  state.finger = null;
+  endPress();
   draw();
 });
 
-function changeMaterialAt(screen: Point, hit: HitRadius): void {
-  const member = findMemberNear(design, camera, screen, hit);
-  if (!member) return;
-  const problem = design.changeMaterial(member.id, state.material, state.section);
-  if (problem) showToast(problem);
+function endPress(): void {
+  state.press = null;
+  state.dragFrom = null;
+  state.pointer = null;
+  state.finger = null;
 }
 
-function eraseAt(screen: Point, hit: HitRadius): void {
-  const node = findNodeNear(design, camera, screen, hit);
-  if (node && !design.isAnchor(node)) {
-    design.removeNode(node.id);
+/**
+ * 部材のはしを付ける点。指のときは、近くに今ある節点があればそこに吸いつける。
+ * 指は点よりずっと太いので、方眼の点だけだと、となりの点につないでしまいやすい。
+ */
+function snapPoint(screen: Point, press: Press): Point {
+  const node = press.touch ? findNodeNear(design, camera, screen, press.hit) : undefined;
+  return node ? { x: node.x, y: node.y } : snapToGrid(screen.x, screen.y);
+}
+
+/** ほとんど動かさずにはなしたか（点がずれていない、または指のぶれ程度しか動いていない） */
+function isTap(press: Press, screen: Point, start: Point, end: Point): boolean {
+  if (samePoint(start, end)) return true;
+  const moved = Math.hypot(screen.x - press.screen.x, screen.y - press.screen.y);
+  return moved < (press.touch ? TAP_SLOP.touch : TAP_SLOP.mouse);
+}
+
+function placeMember(start: Point, end: Point): void {
+  const problem = design.connect(start, end, state.material, state.section);
+  if (problem) {
+    showToast(problem);
     return;
   }
+  // 部材が節点で区切られて番号が変わることがあるので、選んでいたものは選びなおし
+  clearSelection();
+  $('hint').textContent = '部材を置いたよ。置いた部材や節点をタップすると、材料をかえたり、けしたりできるよ。';
+}
+
+// ---------------------------------------------------------------- 置いた部材や節点を選んで直す
+
+/** 組み立て中のタップ：節点か部材の上なら選ぶ（同じものなら選ぶのをやめる）、何もない所なら選ぶのをやめる */
+function selectAt(screen: Point, hit: HitRadius): void {
+  const node = findNodeNear(design, camera, screen, hit);
+  // 支点はけせないので、接合をかえられるステージだけで選べるようにする
+  if (node && (!design.isAnchor(node) || stage.allowRigidJoints)) {
+    if (node.id === state.selectedNodeId) {
+      clearSelection();
+      return;
+    }
+    clearSelection();
+    state.selectedNodeId = node.id;
+    $('hint').textContent = stage.allowRigidJoints
+      ? '接合をえらぶか、「けす」を押そう。新しく置くときは、点から点へなぞってね。'
+      : '「けす」を押すと、この節点とつながる部材がきえるよ。';
+    return;
+  }
+
   const member = findMemberNear(design, camera, screen, hit);
-  if (member) design.removeMember(member.id);
+  if (!member || member.id === state.selectedMemberId) {
+    clearSelection();
+    return;
+  }
+  clearSelection();
+  state.selectedMemberId = member.id;
+  $('hint').textContent = '材料や断面をえらぶか、「けす」を押そう。新しく置くときは、点から点へなぞってね。';
+}
+
+function hasSelection(): boolean {
+  return state.selectedMemberId !== null || state.selectedNodeId !== null;
+}
+
+function clearSelection(): void {
+  state.selectedMemberId = null;
+  state.selectedNodeId = null;
+}
+
+function closeSelectCard(): void {
+  clearSelection();
+  refresh();
+}
+
+function changeSelectedMember(material: MaterialId, section: SectionId): void {
+  if (!state.selectedMemberId) return;
+  // 同じ材料と断面のボタンを押したときは、何も変えない
+  if (design.changeMaterial(state.selectedMemberId, material, section) === null) refresh();
+}
+
+function deleteSelected(): void {
+  if (state.selectedNodeId) {
+    design.removeNode(state.selectedNodeId);
+    $('hint').textContent = '節点をけしたよ。';
+  } else if (state.selectedMemberId) {
+    design.removeMember(state.selectedMemberId);
+    $('hint').textContent = '部材をけしたよ。';
+  }
+  clearSelection();
+  refresh();
 }
 
 // ---------------------------------------------------------------- 走行試験
@@ -368,8 +427,6 @@ function eraseAt(screen: Point, hit: HitRadius): void {
 function startTest(): void {
   closeDrawer();
   setPredicting(false);
-  state.pending = null;
-  state.selectedMemberId = null;
   const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
   const stars = rateAttempt(outcome, design.totalCost(), stage.budget);
   const test: TestPlayback = { outcome, playback: new CrossingPlayback(outcome), stars };
@@ -460,6 +517,7 @@ function currentTestView(): Scene['test'] {
 function refresh(): void {
   updateCost();
   updateInfoPanel();
+  updateSelectCard();
   draw();
 }
 
@@ -468,18 +526,68 @@ function draw(): void {
     design,
     test: currentTestView(),
     selectedMemberId: state.selectedMemberId ?? undefined,
-    pending: state.pending ?? undefined,
+    selectedNodeId: state.selectedNodeId ?? undefined,
     showSectionMarks: stage.sections.length > 1,
     guesses: state.guesses,
   };
   if (state.dragFrom && state.pointer && !samePoint(state.dragFrom, state.pointer)) {
-    const length = Math.hypot(state.pointer.x - state.dragFrom.x, state.pointer.y - state.dragFrom.y);
-    scene.preview = { from: state.dragFrom, to: state.pointer, valid: length <= stage.maxMemberLength };
+    scene.preview = { from: state.dragFrom, to: state.pointer, valid: isShortEnough(state.dragFrom, state.pointer) };
   }
   drawScene(ctx, camera, scene);
 
-  if (state.finger && state.pointer) {
-    drawLoupe(ctx, camera.toScreen(state.pointer.x, state.pointer.y), state.finger);
+  if (state.finger && state.dragFrom && state.pointer) {
+    const target = camera.toScreen(state.pointer.x, state.pointer.y);
+    drawLoupe(ctx, target, state.finger, loupeLabel(state.dragFrom, state.pointer));
+  }
+}
+
+function isShortEnough(from: Point, to: Point): boolean {
+  return Math.hypot(to.x - from.x, to.y - from.y) <= stage.maxMemberLength + 1e-6;
+}
+
+/** なぞっているあいだ、ルーペの下に部材の長さを出す */
+function loupeLabel(from: Point, to: Point): LoupeLabel {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  if (length === 0) return { text: '始まりの点', ok: true };
+  if (!isShortEnough(from, to)) return { text: `長すぎ（${stage.maxMemberLength} m まで）`, ok: false };
+  return { text: `長さ ${length.toFixed(1)} m`, ok: true };
+}
+
+/** 選んだ部材や節点の札を出す。札が選んだものにかぶらないよう、上半分にあれば札を下に出す */
+function updateSelectCard(): void {
+  const card = $('select-card');
+  const member = state.test ? undefined : design.members.find((m) => m.id === state.selectedMemberId);
+  const node = state.test ? undefined : design.nodes.find((n) => n.id === state.selectedNodeId);
+  card.hidden = !member && !node;
+
+  let selectedAt: Point | undefined;
+  if (member) {
+    const [a, b] = design.endsOf(member);
+    selectedAt = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    card.replaceChildren(
+      ...memberCard(design, member, {
+        changeMaterial: (material) => changeSelectedMember(material, member.section),
+        changeSection: (section) => changeSelectedMember(member.material, section),
+        remove: deleteSelected,
+        close: closeSelectCard,
+      }),
+    );
+  } else if (node) {
+    selectedAt = node;
+    card.replaceChildren(
+      ...nodeCard(design, node, {
+        changeJoint: (joint) => {
+          design.setJoint(node.id, joint);
+          refresh();
+        },
+        remove: deleteSelected,
+        close: closeSelectCard,
+      }),
+    );
+  }
+  if (selectedAt) {
+    const onScreen = camera.toScreen(selectedAt.x, selectedAt.y);
+    card.classList.toggle('bottom', onScreen.y < canvas.clientHeight / 2);
   }
 }
 

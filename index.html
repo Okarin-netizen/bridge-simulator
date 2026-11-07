@@ -42,14 +42,11 @@
           <h2>断面</h2>
           <div class="choice-list" id="sections"></div>
         </section>
-        <section>
-          <h2>道具</h2>
-          <div class="choice-grid" id="tools"></div>
-        </section>
       </aside>
 
       <main class="canvas-area">
         <canvas id="canvas"></canvas>
+        <div class="select-card" id="select-card" hidden></div>
         <div class="toast" id="toast" hidden></div>
       </main>
 
@@ -111,12 +108,12 @@
     <footer class="bottombar">
       <div class="edit-actions">
         <!-- スマホを横にしたときだけ出す、左右のパネルを開くボタン -->
-        <button type="button" class="drawer-toggle" id="open-tools">材料と道具<small id="tools-summary"></small></button>
+        <button type="button" class="drawer-toggle" id="open-tools">材料と断面<small id="tools-summary"></small></button>
         <button type="button" class="tool" id="undo" title="Ctrl + Z でももどせます">もどす</button>
         <button type="button" class="tool" id="clear">はじめから</button>
         <button type="button" class="tool" id="load-sample">お手本を置く</button>
       </div>
-      <div class="hint" id="hint">道具「つなぐ」で、点から点へなぞって部材を置こう。</div>
+      <div class="hint" id="hint">点から点へなぞって部材を置こう。置いた部材はタップすると、材料をかえたり、けしたりできるよ。</div>
       <div class="test-actions">
         <button type="button" class="drawer-toggle" id="open-info">負担率<b>--%</b></button>
         <button type="button" class="secondary" id="predict" aria-pressed="false">力を予想する</button>

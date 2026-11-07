@@ -1,5 +1,5 @@
 import { MATERIALS, SECTIONS } from '../engine/materials';
-import type { Bridge, BridgeMember, BridgeNode, MaterialId, Point, SectionId } from '../engine/types';
+import type { Bridge, BridgeMember, BridgeNode, JointType, MaterialId, Point, SectionId } from '../engine/types';
 import { buildPrattTruss } from './presets';
 import { RIGID_JOINT_PRICE } from './stage';
 import type { Stage } from './stage';
@@ -107,12 +107,18 @@ export class BridgeDesign {
     return null;
   }
 
-  toggleJoint(id: string): void {
+  /** 節点をピン接合か剛接合にする。剛接合を使えないステージや、もう同じ接合のときは何もしない */
+  setJoint(id: string, joint: JointType): void {
     if (!this.stage.allowRigidJoints) return;
     const node = this.nodes.find((n) => n.id === id);
-    if (!node) return;
+    if (!node || node.joint === joint) return;
     this.saveForUndo();
-    node.joint = node.joint === 'pin' ? 'rigid' : 'pin';
+    node.joint = joint;
+  }
+
+  toggleJoint(id: string): void {
+    const node = this.nodes.find((n) => n.id === id);
+    if (node) this.setJoint(id, node.joint === 'pin' ? 'rigid' : 'pin');
   }
 
   /** ステージのはじめの状態にもどす */
