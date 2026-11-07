@@ -85,3 +85,29 @@ describe('途中の節点で部材を区切る', () => {
     expect(design.connect({ x: 0, y: 0 }, { x: 4, y: 0 }, 'wood', 'square')).toBe('その 2 点はもうつながっています');
   });
 });
+
+describe('材料をかえる', () => {
+  it('置いた部材の材料と断面をとりかえ、もどすで元にもどせる', () => {
+    const design = new BridgeDesign(firstStage);
+    design.connect({ x: 0, y: 0 }, { x: 4, y: 0 }, 'wood', 'square');
+    const member = design.members[0];
+    const woodCost = design.totalCost();
+
+    expect(design.changeMaterial(member.id, 'steel', 'hbeam')).toBeNull();
+    expect(design.members[0]).toMatchObject({ material: 'steel', section: 'hbeam' });
+    expect(design.totalCost()).toBeGreaterThan(woodCost);
+
+    design.undo();
+    expect(design.members[0]).toMatchObject({ material: 'wood', section: 'square' });
+  });
+
+  it('同じ材料と断面のときは何もせず、もどす回数にもふくめない', () => {
+    const design = new BridgeDesign(firstStage);
+    design.connect({ x: 0, y: 0 }, { x: 4, y: 0 }, 'wood', 'square');
+
+    expect(design.changeMaterial(design.members[0].id, 'wood', 'square')).not.toBeNull();
+    // もどすと、部材を置く前までもどる
+    design.undo();
+    expect(design.members).toHaveLength(0);
+  });
+});

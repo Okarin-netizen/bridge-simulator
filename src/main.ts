@@ -23,10 +23,11 @@ import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
 import { memberInfoHtml, reflectionForm, resultHtml, starText } from './ui/resultPanel';
 
-type Tool = 'connect' | 'erase' | 'joint';
+type Tool = 'connect' | 'change' | 'erase' | 'joint';
 
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: 'connect', label: 'つなぐ', hint: '点から点へなぞるか、2 つの点を順にタップして部材を置こう。' },
+  { id: 'change', label: '材料をかえる', hint: '部材をタップすると、いま選んでいる材料と断面にかわるよ。' },
   { id: 'erase', label: 'けす', hint: 'けしたい部材か節点をタップしよう。' },
   {
     id: 'joint',
@@ -294,6 +295,8 @@ canvas.addEventListener('pointerdown', (event) => {
     canvas.setPointerCapture(event.pointerId);
     state.dragFrom = state.pending ?? snapToGrid(screen.x, screen.y);
     state.pointer = snapToGrid(screen.x, screen.y);
+  } else if (state.tool === 'change') {
+    changeMaterialAt(screen, hit);
   } else if (state.tool === 'erase') {
     eraseAt(screen, hit);
   } else if (state.tool === 'joint') {
@@ -335,6 +338,13 @@ canvas.addEventListener('pointercancel', () => {
   state.pointer = null;
   draw();
 });
+
+function changeMaterialAt(screen: Point, hit: HitRadius): void {
+  const member = findMemberNear(design, camera, screen, hit);
+  if (!member) return;
+  const problem = design.changeMaterial(member.id, state.material, state.section);
+  if (problem) showToast(problem);
+}
 
 function eraseAt(screen: Point, hit: HitRadius): void {
   const node = findNodeNear(design, camera, screen, hit);
