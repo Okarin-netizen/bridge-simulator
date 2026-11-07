@@ -94,6 +94,19 @@ export class BridgeDesign {
     this.removeLooseNodes();
   }
 
+  /** 置いてある部材を、別の材料と断面にとりかえる。とりかえなかったときは理由を返す */
+  changeMaterial(id: string, material: MaterialId, section: SectionId): string | null {
+    const member = this.members.find((m) => m.id === id);
+    if (!member) return null;
+    if (member.material === material && member.section === section) {
+      return 'その部材は、もう同じ材料と断面です';
+    }
+    this.saveForUndo();
+    member.material = material;
+    member.section = section;
+    return null;
+  }
+
   toggleJoint(id: string): void {
     if (!this.stage.allowRigidJoints) return;
     const node = this.nodes.find((n) => n.id === id);
