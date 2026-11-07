@@ -111,3 +111,26 @@ describe('材料をかえる', () => {
     expect(design.members).toHaveLength(0);
   });
 });
+
+describe('接合をかえる', () => {
+  const rigidStage = STAGES.find((s) => s.allowRigidJoints)!;
+
+  it('選んだ接合にし、同じ接合のときは何もしない', () => {
+    const design = new BridgeDesign(rigidStage);
+    const node = design.nodes[0];
+
+    design.setJoint(node.id, 'rigid');
+    expect(node.joint).toBe('rigid');
+    design.setJoint(node.id, 'rigid');
+    // もどすと、1 回でピン接合にもどる
+    design.undo();
+    expect(design.nodes[0].joint).toBe('pin');
+    expect(design.canUndo).toBe(false);
+  });
+
+  it('剛接合を使えないステージでは、かえられない', () => {
+    const design = new BridgeDesign(firstStage);
+    design.setJoint(design.nodes[0].id, 'rigid');
+    expect(design.nodes[0].joint).toBe('pin');
+  });
+});

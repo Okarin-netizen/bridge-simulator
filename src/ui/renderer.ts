@@ -11,9 +11,9 @@ export interface Scene {
   design: BridgeDesign;
   /** 部材をつないでいる途中の線 */
   preview?: { from: Point; to: Point; valid: boolean };
-  /** つなぎ始めの点（タップで 2 点を選ぶとき） */
-  pending?: Point;
   selectedMemberId?: string;
+  /** タップで選んだ節点（接合をかえる・けすとき） */
+  selectedNodeId?: string;
   /** 部材のそばに断面の印（■ ○ H）を出すか。断面を選べるステージだけで出す */
   showSectionMarks?: boolean;
   /** 生徒の予想（部材の上に細い線で示す） */
@@ -88,7 +88,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   if (scene.test?.showLoads) drawLoadsAndReactions(ctx, camera, scene);
 
   if (scene.preview) drawPreview(ctx, camera, scene.preview);
-  if (scene.pending) drawRing(ctx, camera.toScreen(scene.pending.x, scene.pending.y), COLORS.accent);
+  const selectedNode = scene.design.nodes.find((n) => n.id === scene.selectedNodeId);
+  if (selectedNode) drawRing(ctx, camera.toScreen(selectedNode.x, selectedNode.y), COLORS.accent);
   if (scene.test) {
     drawCar(ctx, camera, scene);
     drawDeflectionNote(ctx, scene.test.deflectionScale, height);
@@ -547,6 +548,8 @@ function drawPreview(ctx: CanvasRenderingContext2D, camera: Camera, preview: Non
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
   ctx.setLineDash([]);
+  // どこから引いているかわかるよう、始まりの点にも輪をつける
+  drawRing(ctx, a, COLORS.ink);
   drawRing(ctx, b, preview.valid ? COLORS.accent : COLORS.broken);
 }
 

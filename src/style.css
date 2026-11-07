@@ -202,7 +202,7 @@ h2 {
   text-align: center;
 }
 
-/* 2 列に並べて数が奇数のときは、最後の 1 つを横いっぱいにする（「接合をかえる」が折り返さないように） */
+/* 2 列に並べて数が奇数のときは、最後の 1 つを横いっぱいにする */
 .choice-grid > :last-child:nth-child(odd) {
   grid-column: span 2;
 }
@@ -273,6 +273,55 @@ canvas {
   background: var(--ink);
   color: #fff;
   font-size: 14px;
+}
+
+/* 置いた部材や節点をタップしたときに出す札 */
+.select-card {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(400px, calc(100% - 32px));
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.select-card.bottom {
+  top: auto;
+  bottom: 16px;
+}
+
+.select-card[hidden] {
+  display: none;
+}
+
+.select-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.select-options,
+.select-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.select-card .tool {
+  flex: 1 1 auto;
+  min-height: 40px;
+}
+
+.select-card .tool.danger {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* 右の情報パネル */
@@ -655,7 +704,7 @@ canvas {
 }
 
 /* スマホを横にしたとき：縦の長さが足りないので、上下のバーを左右の細い列に移し、
-   材料・道具と負担率のパネルは引き出しにして、橋の画面をできるだけ広くとる */
+   材料・断面と負担率のパネルは引き出しにして、橋の画面をできるだけ広くとる */
 @media (orientation: landscape) and (max-height: 520px) {
   body {
     overflow: hidden;
@@ -920,5 +969,32 @@ canvas {
 
   .rotate-icon {
     font-size: 56px;
+  }
+}
+
+/* スマホを横にしたとき：橋がかくれないよう、札を小さくする */
+@media (orientation: landscape) and (max-height: 520px) {
+  .select-card {
+    top: 6px;
+    right: 6px;
+    gap: 5px;
+    width: min(340px, calc(100% - 12px));
+    padding: 6px 8px;
+    border-radius: 10px;
+    box-shadow: 0 3px 0 var(--ink);
+  }
+
+  .select-card.bottom {
+    bottom: 6px;
+  }
+
+  .select-title {
+    font-size: 12px;
+  }
+
+  .select-card .tool {
+    min-height: 32px;
+    padding: 2px 6px;
+    font-size: 12px;
   }
 }
