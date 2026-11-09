@@ -42,6 +42,20 @@
           <h2>断面</h2>
           <div class="choice-list" id="sections"></div>
         </section>
+        <section id="joint-help" hidden>
+          <h2>接合</h2>
+          <div class="joint-help">
+            <div class="legend-row">
+              <svg class="legend-icon" viewBox="0 0 36 30" aria-hidden="true"><circle cx="18" cy="15" r="6" /></svg>
+              <span><b>ピン接合</b>＝回る</span>
+            </div>
+            <div class="legend-row">
+              <svg class="legend-icon" viewBox="0 0 36 30" aria-hidden="true"><rect x="12" y="9" width="12" height="12" /></svg>
+              <span><b>剛接合</b>＝回らない</span>
+            </div>
+            <p class="joint-help-how">置いた<b>節点をタップ</b>すると、剛接合（ごうせつごう）にかえられるよ。</p>
+          </div>
+        </section>
       </aside>
 
       <main class="canvas-area">
@@ -75,7 +89,7 @@
           </div>
           <div class="legend-row" id="legend-rigid">
             <svg class="legend-icon" viewBox="0 0 36 30" aria-hidden="true"><rect x="12" y="6" width="12" height="12" /></svg>
-            <span><b>剛接合</b>（ごうせつごう）の節点</span>
+            <span><b>剛接合</b>（ごうせつごう）の節点。節点をタップでかえられる</span>
           </div>
           <div class="legend-row">
             <svg class="legend-icon" viewBox="0 0 36 30" aria-hidden="true"><path class="fill" d="M18 6 L10 22 H26 Z" /><circle cx="18" cy="6" r="5" /></svg>

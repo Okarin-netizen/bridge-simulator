@@ -181,6 +181,7 @@ function openStage(next: Stage): void {
   $('hint').textContent = introText(stage);
   $('load-sample').hidden = !isSandbox(stage);
   $('legend-rigid').hidden = !stage.allowRigidJoints;
+  $('joint-help').hidden = !stage.allowRigidJoints;
 
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
   if (stage.vehicleId) {
@@ -358,7 +359,9 @@ function placeMember(start: Point, end: Point): void {
   }
   // 部材が節点で区切られて番号が変わることがあるので、選んでいたものは選びなおし
   clearSelection();
-  $('hint').textContent = '部材を置いたよ。置いた部材や節点をタップすると、材料をかえたり、けしたりできるよ。';
+  $('hint').textContent = stage.allowRigidJoints
+    ? '部材を置いたよ。節点（丸）をタップすると剛接合にかえられるよ。部材をタップすると、材料をかえたり、けしたりできるよ。'
+    : '部材を置いたよ。置いた部材や節点をタップすると、材料をかえたり、けしたりできるよ。';
 }
 
 // ---------------------------------------------------------------- 置いた部材や節点を選んで直す
@@ -375,7 +378,7 @@ function selectAt(screen: Point, hit: HitRadius): void {
     clearSelection();
     state.selectedNodeId = node.id;
     $('hint').textContent = stage.allowRigidJoints
-      ? '接合をえらぶか、「けす」を押そう。新しく置くときは、点から点へなぞってね。'
+      ? '「ピン接合」か「剛接合」をえらぼう。新しく置くときは、点から点へなぞってね。'
       : '「けす」を押すと、この節点とつながる部材がきえるよ。';
     return;
   }
