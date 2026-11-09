@@ -53,7 +53,7 @@ export function explainOutcome(outcome: CrossingOutcome, options: { allowRigidJo
           'ピン接合の四角形や、1 本だけでぶら下がった部材は、形を保てません。',
         hints: [
           '赤い丸の節点から岸やほかの節点へ部材をつなぎ、三角形を作る',
-          ...(options.allowRigidJoints ? ['角を「剛接合（ごうせつごう）」にする（ラーメン構造）'] : []),
+          ...(options.allowRigidJoints ? ['角の節点をタップして「剛接合（ごうせつごう）」にする（ラーメン構造）'] : []),
         ],
       };
     case 'gap':

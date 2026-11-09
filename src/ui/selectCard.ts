@@ -76,7 +76,11 @@ export function nodeCard(design: BridgeDesign, node: BridgeNode, actions: NodeCa
       ]),
     );
   }
-  const title = anchor ? '選んだ支点（支点はけせません）' : '選んだ節点：けすと、つながっている部材もきえます';
+  const title = anchor
+    ? '選んだ支点（支点はけせません）'
+    : design.stage.allowRigidJoints
+      ? '選んだ節点：接合をえらべます。けすと、つながっている部材もきえます'
+      : '選んだ節点：けすと、つながっている部材もきえます';
   return [cardTitle(title), ...rows, cardActions(anchor ? null : 'この節点をけす', actions)];
 }
 
