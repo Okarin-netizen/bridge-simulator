@@ -11,7 +11,7 @@ import { choiceButton } from './dom';
 import { forceText, yen } from './format';
 
 /*
- * 右のパネルに出す、選んだ部材の情報と試験の結果。
+ * 右のパネルに出す、選んだ部材の情報と試験の結果と、振り返りを書く欄。
  * ここでは HTML を組み立てるだけで、いつ出すかは main.ts が決める。
  */
 
@@ -36,15 +36,29 @@ export function memberInfoHtml(design: BridgeDesign, member: BridgeMember, resul
   return lines.join('<br>');
 }
 
-/** 結果の見出し・星・予想の当たり・説明・次のヒント。実験モードでは stars を null にして星を出さない */
-export function resultHtml(explanation: Explanation, stars: StarCheck[] | null, prediction: PredictionScore): string {
+/** 結果のいちばん上に出す、大きな星と見出し。実験モードでは stars を null にして星を出さない */
+export function resultHeadHtml(explanation: Explanation, stars: StarCheck[] | null): string {
+  const bigStars = stars
+    ? `<div class="result-stars" aria-label="星 ${stars.filter((star) => star.achieved).length} つ">${stars
+        .map((star) => `<span class="${star.achieved ? 'got' : ''}">${star.achieved ? '★' : '☆'}</span>`)
+        .join('')}</div>`
+    : '';
+  return `${bigStars}<h3>${explanation.title}</h3>`;
+}
+
+/** 星の内わけ・予想の当たり・説明・次のヒント */
+export function resultDetailHtml(
+  explanation: Explanation,
+  stars: StarCheck[] | null,
+  prediction: PredictionScore,
+): string {
   const starList = stars
     ? `<ul class="stars">${stars
         .map((star) => `<li class="${star.achieved ? 'got' : ''}">${star.achieved ? '★' : '☆'} ${star.label}</li>`)
         .join('')}</ul>`
     : '';
   return (
-    `<h3>${explanation.title}</h3>${starList}${predictionHtml(prediction)}<p>${explanation.body}</p>` +
+    `${starList}${predictionHtml(prediction)}<p>${explanation.body}</p>` +
     `<b>次はこうしてみよう</b><ul>${explanation.hints.map((h) => `<li>${h}</li>`).join('')}</ul>`
   );
 }
@@ -61,12 +75,12 @@ export function reflectionForm(text: string, onInput: (text: string) => void, on
   form.className = 'reflection';
   form.innerHTML =
     '<label for="reflection-text">気づいたこと（振り返りシートにのります）</label>' +
-    '<textarea id="reflection-text" rows="3" placeholder="例：上の部材が赤くなったので、パイプにしたら負担率が下がった"></textarea>';
+    '<textarea id="reflection-text" rows="6" placeholder="例：上の部材が赤くなったので、パイプにしたら負担率が下がった"></textarea>';
 
   const textarea = form.querySelector('textarea')!;
   textarea.value = text;
   textarea.addEventListener('input', () => onInput(textarea.value));
 
-  form.append(choiceButton('振り返りシートを保存', false, onSave, 'secondary small'));
+  form.append(choiceButton('振り返りシートを保存', false, onSave, 'secondary'));
   return form;
 }

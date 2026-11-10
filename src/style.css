@@ -62,6 +62,8 @@ h2 {
 .stage-title {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .stage-chapter {
@@ -74,13 +76,70 @@ h2 {
   font-weight: 800;
 }
 
-.badge {
-  padding: 6px 14px;
+/* いまの場面（つくる → 予想する → 試験する → ふりかえる） */
+.steps {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 6px;
   border-radius: 999px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 14px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.steps b {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.steps li.current {
+  background: var(--accent);
+  color: #fff;
+}
+
+.steps li.current b {
+  color: var(--accent);
+}
+
+/* 画面がせまいときは、いまの場面だけ名前を出す */
+@media (max-width: 1240px) {
+  .steps li:not(.current) {
+    padding-right: 6px;
+  }
+
+  .steps li:not(.current) span {
+    display: none;
+  }
+
+  .budget {
+    width: 200px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    gap: 14px;
+  }
+
+  .budget {
+    width: 150px;
+  }
 }
 
 .budget {
@@ -138,6 +197,7 @@ h2 {
 /* 車が決まっているステージでは、選べる箱のかわりに文字だけを出す */
 .vehicle-fixed {
   display: flex;
+  white-space: nowrap;
   align-items: center;
   min-height: 40px;
   font-size: 15px;
@@ -178,8 +238,14 @@ h2 {
 }
 
 .info-panel {
-  width: 280px;
+  width: 320px;
   border-left: 1px solid var(--line);
+}
+
+/* 組み立てと予想のあいだは右のパネルをしまって、橋を組む場所を広くする */
+.app[data-phase='build'] .info-panel,
+.app[data-phase='predict'] .info-panel {
+  display: none;
 }
 
 .choice-list {
@@ -337,9 +403,46 @@ canvas {
   font-size: 14px;
 }
 
+/* 組み立て中に、節点や支点の印の意味を橋の画面の下に出す */
+.symbol-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  max-width: calc(100% - 24px);
+  padding: 4px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.symbol-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.symbol-legend span[hidden] {
+  display: none;
+}
+
+.symbol-legend .legend-icon {
+  width: 18px;
+  height: 22px;
+}
+
+.app[data-phase='test'] .symbol-legend,
+.app[data-phase='reflect'] .symbol-legend {
+  display: none;
+}
+
 /* 置いた部材や節点をタップしたときに出す札 */
 .select-card {
   position: absolute;
+  z-index: 1;
   top: 16px;
   right: 16px;
   display: flex;
@@ -509,8 +612,27 @@ canvas {
 
 .result h3 {
   margin: 0 0 6px;
-  font-size: 17px;
+  font-size: 18px;
   color: var(--ink);
+}
+
+.result-stars {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: 4px;
+  color: #c9b98f;
+}
+
+.result-stars .got {
+  color: #d98a00;
+}
+
+.result .small {
+  margin: 8px 0 0;
+}
+
+.result .stars {
+  margin-top: 12px;
 }
 
 .result ul {
@@ -630,6 +752,7 @@ canvas {
 }
 
 .back {
+  flex-shrink: 0;
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--line);
@@ -789,6 +912,45 @@ canvas {
   letter-spacing: 2px;
 }
 
+/* ふりかえりを書く画面 */
+.reflect-box {
+  width: min(900px, 100%);
+}
+
+.reflect-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.reflect-summary img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.reflect-summary ul {
+  margin: 10px 0 0;
+  padding-left: 1.2em;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.reflect-form .reflection {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+}
+
+.reflect-form textarea {
+  flex-grow: 1;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
 /* スマホ用の部品は、ふだん（Chromebook など）は出さない */
 .drawer-toggle,
 .drawer-close,
@@ -874,7 +1036,7 @@ canvas {
 
   /* 列がせまいので、ほかの場所でわかるものは省く（ステージの目標はヒントに、試験中かはボタンに出る） */
   .stage-title,
-  .badge,
+  .steps,
   .spacer,
   .vehicle > span {
     display: none;
@@ -1030,6 +1192,27 @@ canvas {
 
   .stage-list {
     --card-width: 140px;
+  }
+
+  /* 右のパネルは引き出しなので、どの場面でも開けるようにしておく */
+  .app[data-phase] .info-panel {
+    display: flex;
+  }
+
+  .symbol-legend {
+    left: 6px;
+    bottom: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  .result-stars {
+    font-size: 30px;
+  }
+
+  .reflect-body {
+    gap: 12px;
+    margin-top: 8px;
   }
 
   /* 帯を出す高さがないので、目標は上のヒントに書く */

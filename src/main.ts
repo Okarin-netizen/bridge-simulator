@@ -23,7 +23,7 @@ import { CrossingPlayback } from './ui/playback';
 import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
-import { memberInfoHtml, reflectionForm, resultHtml, starText } from './ui/resultPanel';
+import { memberInfoHtml, reflectionForm, resultDetailHtml, resultHeadHtml, starText } from './ui/resultPanel';
 import { memberCard, nodeCard } from './ui/selectCard';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
@@ -61,7 +61,12 @@ const state = {
   guesses: new Map<string, Guess>(),
   /** 振り返りシートに書く気づき */
   reflection: '',
+  /** 振り返りを書く画面を開いているか */
+  reflecting: false,
 };
+
+/** いまの場面。上のバーの 1〜4 と、右のパネルを出すかどうかがこれで決まる */
+type Phase = 'build' | 'predict' | 'test' | 'reflect';
 
 interface TestPlayback {
   outcome: CrossingOutcome;
@@ -98,8 +103,8 @@ function setupControls(): void {
   $('undo').addEventListener('click', undo);
   $('clear').addEventListener('click', () => changeDesign(() => design.clear()));
   document.addEventListener('keydown', (event) => {
-    // ステージを選んでいるあいだは、うしろの橋を変えない
-    const choosingStage = !$('stage-select').hidden;
+    // ステージを選んだり振り返りを書いたりしているあいだは、うしろの橋を変えない
+    const choosingStage = !$('stage-select').hidden || state.reflecting;
     if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !isTyping(event) && !choosingStage) {
       event.preventDefault();
       undo();
@@ -115,6 +120,7 @@ function setupControls(): void {
   });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
   $('replay').addEventListener('click', replayTest);
+  $('close-reflect').addEventListener('click', closeReflection);
   $('predict').addEventListener('click', () => setPredicting(!state.predicting));
 
   $('open-tools').addEventListener('click', () => openDrawer('tools'));
@@ -161,6 +167,7 @@ function setPredicting(on: boolean): void {
   $('hint').textContent = on
     ? '部材をタップして予想しよう。1 回で赤（押される）、2 回で青（引っぱられる）、3 回でもとにもどるよ。'
     : startHint();
+  showPhase();
   draw();
 }
 
@@ -465,8 +472,6 @@ function playTest(test: TestPlayback): void {
   state.test = test;
   $('run-test').textContent = '橋を直す';
   $('hint').textContent = '車が橋をわたっているよ。部材の色と矢印の変わり方を見てみよう。';
-  $('mode-badge').textContent = '試験中';
-  $('mode-badge').hidden = false;
   // 試験のあいだは予想できないので、同じ場所に「もう一度見る」を出す（わたり終わるまでは押せない）
   $('predict').hidden = true;
   $('replay').hidden = false;
@@ -501,7 +506,6 @@ function finishTest(test: TestPlayback): void {
     test.playback.showHardestMoment();
     showToast('いちばん苦しかった瞬間を表示しています');
   }
-  $('mode-badge').textContent = '試験の結果';
   $<HTMLButtonElement>('replay').disabled = false;
   $('hint').textContent = '部材をタップすると、押されているか引っぱられているかと、力の大きさがわかるよ。';
   refresh();
@@ -511,8 +515,8 @@ function leaveTest(): void {
   if (state.test) $('hint').textContent = startHint();
   state.test = null;
   state.selectedMemberId = null;
+  closeReflection();
   $('run-test').textContent = '試験スタート';
-  $('mode-badge').hidden = true;
   $('predict').hidden = false;
   $('replay').hidden = true;
   refresh();
@@ -553,6 +557,7 @@ function currentTestView(): Scene['test'] {
 // ---------------------------------------------------------------- 表示の更新
 
 function refresh(): void {
+  showPhase();
   updateGoalStars();
   updateCost();
   updateInfoPanel();
@@ -630,6 +635,21 @@ function updateSelectCard(): void {
   }
 }
 
+function currentPhase(): Phase {
+  if (state.reflecting) return 'reflect';
+  if (state.test) return 'test';
+  return state.predicting ? 'predict' : 'build';
+}
+
+/** 上のバーで、いまの場面に印を付ける。右のパネルを出すかどうかは、style.css が data-phase を見て決める */
+function showPhase(): void {
+  const phase = currentPhase();
+  app.dataset.phase = phase;
+  for (const step of $('steps').children) {
+    step.classList.toggle('current', (step as HTMLElement).dataset.phase === phase);
+  }
+}
+
 /** 目標の帯に星の条件を並べる。試験が終わったら、取れた星をぬる */
 function updateGoalStars(): void {
   const list = $('goal-stars');
@@ -684,40 +704,71 @@ function updateResult(): void {
 
   const explanation = explainOutcome(test.outcome, stage);
   const prediction = scorePredictions(state.guesses, test.playback.currentMembers);
-  box.innerHTML = resultHtml(explanation, isSandbox(stage) ? null : test.stars, prediction);
-  box.append(
-    reflectionForm(
-      state.reflection,
-      (text) => (state.reflection = text),
-      () => saveReport(test, explanation.title),
-    ),
-  );
+  const stars = isSandbox(stage) ? null : test.stars;
+  box.innerHTML = resultHeadHtml(explanation, stars);
 
+  // 次に押すボタンは、スクロールしなくても見える所に置く
   const nextStage = STAGES[STAGES.indexOf(stage) + 1];
   if (test.outcome.status === 'crossed' && nextStage) {
-    const next = choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small');
-    box.append(next);
+    box.append(choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small'));
   }
+  box.append(choiceButton('ふりかえりを書く', false, () => openReflection(test, explanation.title), 'secondary small'));
+  box.insertAdjacentHTML('beforeend', resultDetailHtml(explanation, stars, prediction));
   if (wasHidden) {
     if (phoneLayout.matches) openDrawer('info');
     box.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 }
 
+// ---------------------------------------------------------------- ふりかえり
+
+/** 試験した橋の絵と結果を見ながら、気づきを書く画面を開く */
+function openReflection(test: TestPlayback, resultTitle: string): void {
+  state.reflecting = true;
+  $<HTMLImageElement>('reflect-picture').src = canvas.toDataURL('image/png');
+  $('reflect-lines').replaceChildren(
+    ...reportLines(test).map((line) => {
+      const item = document.createElement('li');
+      item.textContent = line;
+      return item;
+    }),
+  );
+  $('reflect-form').replaceChildren(
+    reflectionForm(
+      state.reflection,
+      (text) => (state.reflection = text),
+      () => saveReport(test, resultTitle),
+    ),
+  );
+  $('reflect').hidden = false;
+  showPhase();
+}
+
+function closeReflection(): void {
+  state.reflecting = false;
+  $('reflect').hidden = true;
+  showPhase();
+}
+
+/** 振り返りの画面と振り返りシートに書く、試験のまとめ */
+function reportLines(test: TestPlayback): string[] {
+  const score = scorePredictions(state.guesses, test.playback.currentMembers);
+  return [
+    `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
+    `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
+    `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
+    ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),
+    ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
+  ];
+}
+
 /** 振り返りシートを画像で保存する */
 function saveReport(test: TestPlayback, resultTitle: string): void {
-  const score = scorePredictions(state.guesses, test.playback.currentMembers);
   saveReportImage(canvas, {
     stageId: stage.id,
     stageTitle: stage.title,
     resultTitle,
-    lines: [
-      `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
-      `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
-      `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
-      ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),
-      ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
-    ],
+    lines: reportLines(test),
     reflection: state.reflection,
   });
 }
