@@ -111,14 +111,29 @@ describe('ステージには答えがある', () => {
     expectThreeStars(build(stage, pratt(24, -4)));
   });
 
-  it('3-1：角材の木のトラスではバスで座屈するが、パイプならわたれ、H形なら余裕が出る', () => {
+  it('3-1：木の角材ではバスで座屈する。H形は横に曲がって座屈し、パイプならわたれる', () => {
     const stage = stageById('3-1');
     const weak = test(build(stage, pratt(16), 'wood', 'square'));
     expect(weak.status).toBe('collapsed');
     expect(weak.broken[0].mode).toBe('buckling');
 
-    expect(test(build(stage, pratt(16), 'wood', 'pipe')).status).toBe('crossed');
-    expectThreeStars(build(stage, pratt(16), 'wood', 'hbeam'));
+    // H形は縦の向きには強いが、横の向きに曲がりやすいので、押される部材には向かない
+    const hbeam = test(build(stage, pratt(16), 'wood', 'hbeam'));
+    expect(hbeam.status).toBe('collapsed');
+    expect(hbeam.broken[0].mode).toBe('buckling');
+
+    const pipe = test(build(stage, pratt(16), 'wood', 'pipe'));
+    expect(pipe.status).toBe('crossed');
+    expect(pipe.maxUtilization).toBeGreaterThan(SAFE_UTILIZATION);
+  });
+
+  it('3-1：パイプのトラスに、下の段の支点から斜めの支えを足すと余裕が出る', () => {
+    const stage = stageById('3-1');
+    const struts: Segment[] = [
+      [[0, -4], [4, 0]],
+      [[16, -4], [12, 0]],
+    ];
+    expectThreeStars(build(stage, [...pratt(16), ...struts], 'wood', 'pipe'));
   });
 
   it('3-2：斜材は置けない。四角形はピンだとくずれ、剛接合にするとわたれる', () => {

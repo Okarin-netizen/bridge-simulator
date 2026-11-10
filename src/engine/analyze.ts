@@ -238,7 +238,8 @@ function memberResult(geometry: MemberGeometry, u: number[], nodeIndex: Map<stri
 /**
  * 部材がどれだけ限界に近いか（負担率）を求める。
  * - 引張・圧縮：軸力による応力 + 曲げによる応力 が材料の強さを超えるとこわれる
- * - 座屈：押す力がオイラーの座屈荷重 π²EI/L² を超えると横に曲がってこわれる
+ * - 座屈：押す力がオイラーの座屈荷重 π²EI/L² を超えると横に曲がってこわれる。
+ *   I はいちばん曲がりやすい向きの値（H形なら横向き）を使う
  */
 function judgeStrength(
   geometry: MemberGeometry,
@@ -246,7 +247,7 @@ function judgeStrength(
   moment: number,
 ): { utilization: number; mode: FailureMode } {
   const { E, strength } = MATERIALS[geometry.member.material];
-  const { A, I, Z } = SECTIONS[geometry.member.section];
+  const { A, Imin, Z } = SECTIONS[geometry.member.section];
 
   const axialRatio = Math.abs(axial) / (strength * A);
   const bendingRatio = moment / (strength * Z);
@@ -256,7 +257,7 @@ function judgeStrength(
   if (bendingRatio > axialRatio) strengthMode = 'bending';
 
   if (axial < 0) {
-    const bucklingLoad = (Math.PI ** 2 * E * I) / geometry.length ** 2;
+    const bucklingLoad = (Math.PI ** 2 * E * Imin) / geometry.length ** 2;
     const bucklingRatio = -axial / bucklingLoad;
     if (bucklingRatio > strengthRatio) return { utilization: bucklingRatio, mode: 'buckling' };
   }
