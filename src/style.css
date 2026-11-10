@@ -697,6 +697,18 @@ canvas {
   background: var(--accent-soft);
 }
 
+.lesson {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.lesson p {
+  margin: 4px 0 0;
+}
+
 .prediction-score {
   margin: 8px 0;
   padding: 8px 10px;
