@@ -26,32 +26,42 @@ export interface Section {
   name: string;
   /** 断面積（m²） */
   A: number;
-  /** 断面二次モーメント（m⁴）：曲がりにくさ */
+  /** 断面二次モーメント（m⁴）：曲げに対する曲がりにくさ（橋の面の中で曲がる向き） */
   I: number;
+  /**
+   * いちばん曲がりやすい向きの断面二次モーメント（m⁴）。座屈はこの向きに起きる。
+   * 角材とパイプはどの向きも同じだが、H形は横（フランジの面）に曲がりやすい。
+   */
+  Imin: number;
   /** 断面係数（m³）：曲げに対する強さ */
   Z: number;
   /** 値段の倍率 */
   priceFactor: number;
 }
 
-function square(side: number): Pick<Section, 'A' | 'I' | 'Z'> {
+type Shape = Pick<Section, 'A' | 'I' | 'Imin' | 'Z'>;
+
+function square(side: number): Shape {
   const I = side ** 4 / 12;
-  return { A: side * side, I, Z: I / (side / 2) };
+  return { A: side * side, I, Imin: I, Z: I / (side / 2) };
 }
 
-function pipe(outer: number, inner: number): Pick<Section, 'A' | 'I' | 'Z'> {
+function pipe(outer: number, inner: number): Shape {
   const A = (Math.PI / 4) * (outer ** 2 - inner ** 2);
   const I = (Math.PI / 64) * (outer ** 4 - inner ** 4);
-  return { A, I, Z: I / (outer / 2) };
+  return { A, I, Imin: I, Z: I / (outer / 2) };
 }
 
-function hbeam(width: number, height: number, flange: number, web: number): Pick<Section, 'A' | 'I' | 'Z'> {
+function hbeam(width: number, height: number, flange: number, web: number): Shape {
   const A = 2 * width * flange + (height - 2 * flange) * web;
   const I = (width * height ** 3 - (width - web) * (height - 2 * flange) ** 3) / 12;
-  return { A, I, Z: I / (height / 2) };
+  // 弱い向き：2 枚のフランジとウェブを、それぞれ横に倒した板として足す
+  const Imin = (2 * flange * width ** 3 + (height - 2 * flange) * web ** 3) / 12;
+  return { A, I, Imin, Z: I / (height / 2) };
 }
 
 // 3 つの断面はほぼ同じ断面積（= ほぼ同じ重さ・材料の量）で、曲がりにくさが違う。
+// パイプはどの向きにも曲がりにくいので押される部材に、H形は縦の向きにだけ強いので曲げを受ける梁に向く。
 export const SECTIONS: Record<SectionId, Section> = {
   square: { id: 'square', name: '角材', ...square(0.1), priceFactor: 1 },
   pipe: { id: 'pipe', name: 'パイプ', ...pipe(0.2, 0.1651), priceFactor: 1.3 },

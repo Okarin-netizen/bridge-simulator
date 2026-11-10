@@ -35,13 +35,18 @@ export function sectionButtons(
   selected: SectionId,
   onSelect: (id: SectionId) => void,
 ): HTMLButtonElement[] {
-  // 曲がりにくさは、角材を 1 としたときの何倍かで見せる
-  const stiffnessOf = (id: SectionId) => Math.round(SECTIONS[id].I / SECTIONS.square.I);
+  // 曲がりにくさは、角材を 1 としたときの何倍かで見せる。
+  // 押されたときは弱い向きに曲がるので、H形は「押す力」と「曲げ」で倍率がちがう。
+  const ratio = (value: number) => {
+    const times = value / SECTIONS.square.I;
+    const rounded = Math.round(times);
+    return times < 2 && Math.abs(times - rounded) > 0.05 ? times.toFixed(1) : rounded.toString();
+  };
   return ids.map((id) => {
     const section = SECTIONS[id];
     return choiceButton(
       `<span class="section-icon">${SECTION_ICONS[id]}</span>${section.name}` +
-        `<small>曲がりにくさ ×${stiffnessOf(id)}・値段 ×${section.priceFactor}</small>`,
+        `<small>押す力 ×${ratio(section.Imin)}・曲げ ×${ratio(section.I)}<br>値段 ×${section.priceFactor}</small>`,
       selected === id,
       () => onSelect(id),
       'choice',
