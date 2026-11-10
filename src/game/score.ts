@@ -13,6 +13,9 @@ export function utilizationPercent(utilization: number): number {
   return Math.ceil(utilization * 100 - 1e-9);
 }
 
+/** 星の条件を短く書いたもの（rateAttempt と同じ順番）。試験の前から画面に出しておく */
+export const STAR_GOALS = ['車がわたり切る', '予算の中で作る', `負担率 ${utilizationPercent(SAFE_UTILIZATION)}% 以下`];
+
 export interface StarCheck {
   label: string;
   achieved: boolean;

@@ -7,12 +7,12 @@ import { BridgeDesign } from './game/design';
 import { explainOutcome } from './game/explain';
 import { nextGuess, scorePredictions } from './game/prediction';
 import type { Guess } from './game/prediction';
-import { countStars, Progress, rateAttempt, utilizationPercent } from './game/score';
+import { countStars, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
 import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
-import { materialButtons, sectionButtons, stageCard } from './ui/choices';
+import { materialButtons, sectionButtons, stageGroups } from './ui/choices';
 import { $, choiceButton, showToast } from './ui/dom';
 import { tons, yen } from './ui/format';
 import { findMemberNear, findNodeNear, hitRadiusFor, samePoint } from './ui/hitTest';
@@ -114,6 +114,7 @@ function setupControls(): void {
     }
   });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
+  $('replay').addEventListener('click', replayTest);
   $('predict').addEventListener('click', () => setPredicting(!state.predicting));
 
   $('open-tools').addEventListener('click', () => openDrawer('tools'));
@@ -159,8 +160,16 @@ function setPredicting(on: boolean): void {
   $('predict').setAttribute('aria-pressed', String(on));
   $('hint').textContent = on
     ? '部材をタップして予想しよう。1 回で赤（押される）、2 回で青（引っぱられる）、3 回でもとにもどるよ。'
-    : introText(stage);
+    : startHint();
   draw();
+}
+
+/**
+ * ステージを始めたときに下に出す文。目標は橋の上の帯にいつも出ているので、ヒントだけにする。
+ * スマホでは帯を出す場所がないので、目標もここに書く。
+ */
+function startHint(): string {
+  return phoneLayout.matches ? introText(stage) : stage.hint;
 }
 
 /** ステージを開いて、そのステージで使える材料や道具だけを並べる */
@@ -178,17 +187,22 @@ function openStage(next: Stage): void {
   $('stage-chapter').textContent = stage.chapter;
   $('stage-name').textContent = stage.title;
   $('budget').textContent = yen(stage.budget);
-  $('hint').textContent = introText(stage);
+  $('hint').textContent = startHint();
+  $('goal-text').textContent = stage.goal;
   $('load-sample').hidden = !isSandbox(stage);
   $('legend-rigid').hidden = !stage.allowRigidJoints;
   $('joint-help').hidden = !stage.allowRigidJoints;
 
+  // 車が決まっているステージでは、選べる箱ではなく、ただの文字で見せる
   const vehicleSelect = $<HTMLSelectElement>('vehicle');
-  if (stage.vehicleId) {
+  const vehicleIsFixed = stage.vehicleId !== null;
+  if (vehicleIsFixed) {
     state.vehicle = VEHICLES.find((v) => v.id === stage.vehicleId)!;
     vehicleSelect.value = state.vehicle.id;
+    $('vehicle-fixed').textContent = `${state.vehicle.name} ${tons(state.vehicle.mass)}`;
   }
-  vehicleSelect.disabled = stage.vehicleId !== null;
+  vehicleSelect.hidden = vehicleIsFixed;
+  $('vehicle-fixed').hidden = !vehicleIsFixed;
 
   $('stage-select').hidden = true;
   closeDrawer();
@@ -197,10 +211,15 @@ function openStage(next: Stage): void {
 }
 
 function showStageSelect(): void {
-  const cards = [...STAGES, SANDBOX_STAGE].map((s) =>
-    stageCard(s, isSandbox(s) ? '' : starText(progress.starsFor(s.id)), () => openStage(s)),
+  // まだ星を取っていない最初のステージに「つぎはここ」の印を付ける
+  const nextStage = STAGES.find((s) => progress.starsFor(s.id) === 0);
+  const groups = stageGroups(
+    [...STAGES, SANDBOX_STAGE],
+    (s) => (isSandbox(s) ? '' : starText(progress.starsFor(s.id))),
+    nextStage?.id,
+    openStage,
   );
-  $('stage-list').replaceChildren(...cards);
+  $('stage-list').replaceChildren(...groups);
   $('stage-select').hidden = false;
 }
 
@@ -432,13 +451,27 @@ function startTest(): void {
   setPredicting(false);
   const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
   const stars = rateAttempt(outcome, design.totalCost(), stage.budget);
-  const test: TestPlayback = { outcome, playback: new CrossingPlayback(outcome), stars };
+  playTest({ outcome, playback: new CrossingPlayback(outcome), stars });
+}
+
+/** 同じ橋のまま、車がわたる様子をはじめから見直す */
+function replayTest(): void {
+  if (!state.test) return;
+  state.selectedMemberId = null;
+  playTest({ ...state.test, playback: new CrossingPlayback(state.test.outcome) });
+}
+
+function playTest(test: TestPlayback): void {
   state.test = test;
   $('run-test').textContent = '橋を直す';
   $('hint').textContent = '車が橋をわたっているよ。部材の色と矢印の変わり方を見てみよう。';
   $('mode-badge').textContent = '試験中';
   $('mode-badge').hidden = false;
-  $<HTMLButtonElement>('predict').disabled = true;
+  // 試験のあいだは予想できないので、同じ場所に「もう一度見る」を出す（わたり終わるまでは押せない）
+  $('predict').hidden = true;
+  $('replay').hidden = false;
+  $<HTMLButtonElement>('replay').disabled = true;
+  refresh();
   requestAnimationFrame((now) => playAnimation(test, now));
 }
 
@@ -469,17 +502,19 @@ function finishTest(test: TestPlayback): void {
     showToast('いちばん苦しかった瞬間を表示しています');
   }
   $('mode-badge').textContent = '試験の結果';
+  $<HTMLButtonElement>('replay').disabled = false;
   $('hint').textContent = '部材をタップすると、押されているか引っぱられているかと、力の大きさがわかるよ。';
   refresh();
 }
 
 function leaveTest(): void {
-  if (state.test) $('hint').textContent = introText(stage);
+  if (state.test) $('hint').textContent = startHint();
   state.test = null;
   state.selectedMemberId = null;
   $('run-test').textContent = '試験スタート';
   $('mode-badge').hidden = true;
-  $<HTMLButtonElement>('predict').disabled = false;
+  $('predict').hidden = false;
+  $('replay').hidden = true;
   refresh();
 }
 
@@ -518,6 +553,7 @@ function currentTestView(): Scene['test'] {
 // ---------------------------------------------------------------- 表示の更新
 
 function refresh(): void {
+  updateGoalStars();
   updateCost();
   updateInfoPanel();
   updateSelectCard();
@@ -592,6 +628,17 @@ function updateSelectCard(): void {
     const onScreen = camera.toScreen(selectedAt.x, selectedAt.y);
     card.classList.toggle('bottom', onScreen.y < canvas.clientHeight / 2);
   }
+}
+
+/** 目標の帯に星の条件を並べる。試験が終わったら、取れた星をぬる */
+function updateGoalStars(): void {
+  const list = $('goal-stars');
+  list.hidden = isSandbox(stage);
+  const finished = state.test?.playback.finished ? state.test : null;
+  list.innerHTML = STAR_GOALS.map((goal, i) => {
+    const got = finished?.stars[i].achieved ?? false;
+    return `<li class="${got ? 'got' : ''}">${got ? '★' : '☆'} ${goal}</li>`;
+  }).join('');
 }
 
 function updateCost(): void {

@@ -1,7 +1,7 @@
 import { MATERIALS, SECTIONS } from '../engine/materials';
 import type { MaterialId, SectionId } from '../engine/types';
 import type { Stage } from '../game/stage';
-import { MATERIAL_COLORS } from './colors';
+import { COLORS, MATERIAL_COLORS } from './colors';
 import { choiceButton } from './dom';
 import { yen } from './format';
 import { SECTION_ICONS } from './sectionIcons';
@@ -49,13 +49,74 @@ export function sectionButtons(
   });
 }
 
-/** ステージを選ぶ画面のカード。stars は取った星の表示（実験モードは空文字） */
-export function stageCard(stage: Stage, stars: string, onOpen: () => void): HTMLButtonElement {
+/**
+ * ステージを選ぶ画面。章ごとにまとめて並べる。
+ * starsOf は取った星の表示（実験モードは空文字）、nextId は「つぎはここ」の印を付けるステージ。
+ */
+export function stageGroups(
+  stages: Stage[],
+  starsOf: (stage: Stage) => string,
+  nextId: string | undefined,
+  onOpen: (stage: Stage) => void,
+): HTMLElement[] {
+  const chapters = [...new Set(stages.map((stage) => stage.chapter))];
+  return chapters.map((chapter) => {
+    const inChapter = stages.filter((stage) => stage.chapter === chapter);
+    const group = document.createElement('section');
+    group.className = 'chapter';
+    group.style.setProperty('--count', String(inChapter.length));
+
+    const heading = document.createElement('h2');
+    heading.textContent = chapter;
+    const cards = document.createElement('div');
+    cards.className = 'chapter-cards';
+    cards.append(...inChapter.map((stage) => stageCard(stage, starsOf(stage), stage.id === nextId, () => onOpen(stage))));
+
+    group.append(heading, cards);
+    return group;
+  });
+}
+
+function stageCard(stage: Stage, stars: string, isNext: boolean, onOpen: () => void): HTMLButtonElement {
   return choiceButton(
-    `<span class="card-chapter">${stage.chapter}</span><span class="card-title">${stage.title}</span>` +
+    (isNext ? '<span class="card-next">つぎはここ</span>' : '') +
+      stageThumbnail(stage) +
+      `<span class="card-title">${stage.title}</span>` +
       `<span class="card-goal">${stage.goal}</span><span class="card-stars">${stars}</span>`,
     false,
     onOpen,
-    'stage-card',
+    isNext ? 'stage-card next' : 'stage-card',
+  );
+}
+
+/** 谷の広さと、はじめから置いてある部材がわかる小さな絵。どのステージも同じ縮尺で描く */
+function stageThumbnail(stage: Stage): string {
+  const width = 120;
+  const height = 48;
+  const scale = 4; // 1 m を何 px で描くか
+  const roadY = 22;
+  const left = (width - stage.span * scale) / 2;
+  const at = (x: number, y: number) => `${left + x * scale} ${roadY - y * scale}`;
+
+  const cliff = (x: number) =>
+    `<rect x="${x}" y="${roadY}" width="${left}" height="${height - roadY}" fill="${COLORS.cliff}" />` +
+    `<rect x="${x}" y="${roadY}" width="${left}" height="2.5" fill="${COLORS.grass}" />`;
+  const members = stage.presetMembers
+    .map((member) => `<path d="M${at(...member.from)}L${at(...member.to)}" />`)
+    .join('');
+  const anchors = stage.anchors
+    .map((anchor) => `<circle cx="${left + anchor.x * scale}" cy="${roadY - anchor.y * scale}" r="2.2" />`)
+    .join('');
+
+  return (
+    `<svg class="card-thumb" viewBox="0 0 ${width} ${height}" aria-hidden="true">` +
+    `<rect width="${width}" height="${height}" fill="${COLORS.sky}" />` +
+    `<rect x="${left}" y="${height - 5}" width="${stage.span * scale}" height="5" fill="${COLORS.river}" />` +
+    cliff(0) +
+    cliff(width - left) +
+    `<g stroke="${MATERIAL_COLORS.wood}" stroke-width="1.6" stroke-linecap="round">${members}</g>` +
+    `<g fill="#fff" stroke="${COLORS.ink}" stroke-width="1.2">${anchors}</g>` +
+    `<text x="${width / 2}" y="${height - 9}" text-anchor="middle" font-size="8" font-weight="700" fill="${COLORS.muted}">${stage.span} m</text>` +
+    '</svg>'
   );
 }

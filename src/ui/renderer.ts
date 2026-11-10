@@ -129,12 +129,19 @@ function drawnEndpoints(scene: Scene, member: BridgeMember): [Point, Point] {
 function drawGrid(ctx: CanvasRenderingContext2D, camera: Camera, design: BridgeDesign): void {
   const { minX, maxX, minY, maxY } = design.stage.buildArea;
   const step = design.stage.gridSize;
+
+  // 置ける範囲は、はしの点より少し外まで明るくする
+  const topLeft = camera.toScreen(minX - step / 2, maxY + step / 2);
+  const bottomRight = camera.toScreen(maxX + step / 2, minY - step / 2);
+  ctx.fillStyle = COLORS.buildArea;
+  ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+
   ctx.fillStyle = COLORS.gridDot;
   for (let x = minX; x <= maxX; x += step) {
     for (let y = minY; y <= maxY; y += step) {
       const p = camera.toScreen(x, y);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
       ctx.fill();
     }
   }

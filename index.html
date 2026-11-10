@@ -28,6 +28,7 @@
       <label class="vehicle">
         <span>わたる車</span>
         <select id="vehicle"></select>
+        <b class="vehicle-fixed" id="vehicle-fixed" hidden></b>
       </label>
     </header>
 
@@ -59,9 +60,16 @@
       </aside>
 
       <main class="canvas-area">
-        <canvas id="canvas"></canvas>
-        <div class="select-card" id="select-card" hidden></div>
-        <div class="toast" id="toast" hidden></div>
+        <div class="goal" id="goal">
+          <span class="goal-label">目標</span>
+          <span class="goal-text" id="goal-text"></span>
+          <ul class="goal-stars" id="goal-stars"></ul>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="canvas"></canvas>
+          <div class="select-card" id="select-card" hidden></div>
+          <div class="toast" id="toast" hidden></div>
+        </div>
       </main>
 
       <aside class="panel info-panel" id="info-panel">
@@ -131,6 +139,7 @@
       <div class="test-actions">
         <button type="button" class="drawer-toggle" id="open-info">負担率<b>--%</b></button>
         <button type="button" class="secondary" id="predict" aria-pressed="false">力を予想する</button>
+        <button type="button" class="secondary" id="replay" hidden>もう一度見る</button>
         <button type="button" class="primary" id="run-test">試験スタート</button>
       </div>
     </footer>
