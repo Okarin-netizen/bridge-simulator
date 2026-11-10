@@ -47,6 +47,11 @@ export function resultHeadHtml(explanation: Explanation, stars: StarCheck[] | nu
 }
 
 /** 星の内わけ・予想の当たり・説明・次のヒント */
+/** わたり切ったときに出す、そのステージで「わかったこと」 */
+export function lessonHtml(lesson: string): string {
+  return `<div class="lesson"><b>わかったこと</b><p>${lesson}</p></div>`;
+}
+
 export function resultDetailHtml(
   explanation: Explanation,
   stars: StarCheck[] | null,

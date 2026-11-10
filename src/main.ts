@@ -23,7 +23,7 @@ import { CrossingPlayback } from './ui/playback';
 import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
-import { memberInfoHtml, reflectionForm, resultDetailHtml, resultHeadHtml, starText } from './ui/resultPanel';
+import { lessonHtml, memberInfoHtml, reflectionForm, resultDetailHtml, resultHeadHtml, starText } from './ui/resultPanel';
 import { memberCard, nodeCard } from './ui/selectCard';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
@@ -713,6 +713,7 @@ function updateResult(): void {
     box.append(choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small'));
   }
   box.append(choiceButton('ふりかえりを書く', false, () => openReflection(test, explanation.title), 'secondary small'));
+  if (test.outcome.status === 'crossed' && stage.lesson) box.insertAdjacentHTML('beforeend', lessonHtml(stage.lesson));
   box.insertAdjacentHTML('beforeend', resultDetailHtml(explanation, stars, prediction));
   if (wasHidden) {
     if (phoneLayout.matches) openDrawer('info');
