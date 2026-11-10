@@ -39,7 +39,9 @@ export function explainOutcome(outcome: CrossingOutcome, options: { allowRigidJo
     case 'crossed':
       return {
         title: 'わたり切りました！',
-        body: `いちばん苦しかった部材の負担率は ${percent}% でした。`,
+        body:
+          `いちばん苦しかった部材の負担率は ${percent}% でした。` +
+          '負担率 70% 以下なら、こわれるまでに 1.4 倍以上の余裕があります。本物の橋も、このような余裕（安全率）をもたせて作ります。',
         hints:
           percent > 70
             ? ['安全の目安は 70% 以下。赤や青がこい部材を強くしてみよう']

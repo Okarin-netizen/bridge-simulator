@@ -181,3 +181,9 @@ describe('ステージには答えがある', () => {
     expectThreeStars(steelWhereCompressed(stageById('4-1')));
   });
 });
+
+describe('わかったこと', () => {
+  it('どのステージにも、わたり切ったときに見せる「わかったこと」がある', () => {
+    for (const stage of STAGES) expect(stage.lesson, stage.id).toBeTruthy();
+  });
+});
