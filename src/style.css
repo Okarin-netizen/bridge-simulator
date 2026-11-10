@@ -135,6 +135,15 @@ h2 {
   color: var(--muted);
 }
 
+/* 車が決まっているステージでは、選べる箱のかわりに文字だけを出す */
+.vehicle-fixed {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
 .vehicle select {
   min-height: 40px;
   padding: 0 10px;
@@ -250,9 +259,62 @@ h2 {
 }
 
 .canvas-area {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   flex-grow: 1;
   min-width: 0;
+}
+
+/* 目標と星の条件は、橋の上の帯にいつも出しておく */
+.goal {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 8px 16px;
+  background: var(--hint);
+  color: var(--hint-ink);
+  font-size: 15px;
+}
+
+.goal-label {
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--hint-ink);
+  color: var(--hint);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.goal-text {
+  font-weight: 700;
+}
+
+.goal-stars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.goal-stars[hidden] {
+  display: none;
+}
+
+.goal-stars li.got {
+  font-weight: 700;
+  color: #9a5b00;
+}
+
+.canvas-wrap {
+  position: relative;
+  flex-grow: 1;
+  min-height: 0;
 }
 
 canvas {
@@ -578,11 +640,6 @@ canvas {
   cursor: pointer;
 }
 
-.vehicle select:disabled {
-  opacity: 1;
-  background: var(--soft);
-}
-
 .primary.small {
   width: 100%;
   height: 48px;
@@ -620,7 +677,7 @@ canvas {
 }
 
 .overlay-box {
-  width: min(960px, 100%);
+  width: min(1160px, 100%);
   max-height: 100%;
   overflow-y: auto;
   padding: 28px;
@@ -651,18 +708,36 @@ canvas {
   color: var(--muted);
 }
 
+/* 章を横に並べる。広い画面では 1 行にカード 5 枚、せまい画面では章ごとに折り返す */
 .stage-list {
+  --card-width: 180px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 12px;
+}
+
+.chapter {
+  flex: var(--count) 1 calc(var(--count) * var(--card-width));
+  min-width: 0;
+}
+
+.chapter h2 {
+  margin: 0 0 6px;
+}
+
+.chapter-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--card-width), 100%), 1fr));
   gap: 12px;
+  height: calc(100% - 26px);
 }
 
 .stage-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-height: 132px;
-  padding: 16px;
+  padding: 10px 12px 12px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -674,13 +749,31 @@ canvas {
   border-color: var(--accent);
 }
 
-.card-chapter {
+.stage-card.next {
+  border: 2px solid var(--accent);
+  padding: 9px 11px 11px;
+}
+
+.card-next {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
   font-size: 12px;
-  color: var(--muted);
+  font-weight: 700;
+}
+
+.card-thumb {
+  width: 100%;
+  margin-bottom: 4px;
+  border-radius: 8px;
 }
 
 .card-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -936,12 +1029,17 @@ canvas {
   }
 
   .stage-list {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    --card-width: 140px;
   }
 
-  .stage-card {
+  /* 帯を出す高さがないので、目標は上のヒントに書く */
+  .goal {
+    display: none;
+  }
+
+  .vehicle-fixed {
     min-height: 0;
-    padding: 12px;
+    font-size: 12px;
   }
 }
 

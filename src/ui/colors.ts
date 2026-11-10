@@ -5,7 +5,9 @@ export const FONT_FAMILY = "'M PLUS Rounded 1c', system-ui, sans-serif";
 
 export const COLORS = {
   sky: '#DCEBF5',
-  gridDot: '#9FB6C8',
+  gridDot: '#7C97AD',
+  /** 節点を置ける範囲を、空より少し明るくして見せる */
+  buildArea: 'rgba(255, 255, 255, 0.3)',
   cliff: '#A07D58',
   grass: '#6E8F4E',
   river: '#6FA8D6',
