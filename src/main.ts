@@ -7,12 +7,12 @@ import { BridgeDesign } from './game/design';
 import { explainOutcome } from './game/explain';
 import { nextGuess, scorePredictions } from './game/prediction';
 import type { Guess } from './game/prediction';
-import { countStars, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
+import { countStars, isMasterBuild, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
 import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
-import { materialButtons, sectionButtons, stageGroups } from './ui/choices';
+import { materialButtons, sectionButtons, stageGroups, stageRecordHtml } from './ui/choices';
 import { $, choiceButton, showToast } from './ui/dom';
 import { tons, yen } from './ui/format';
 import { findMemberNear, findNodeNear, hitRadiusFor, samePoint } from './ui/hitTest';
@@ -23,7 +23,16 @@ import { CrossingPlayback } from './ui/playback';
 import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
-import { lessonHtml, memberInfoHtml, reflectionForm, resultDetailHtml, resultHeadHtml, starText } from './ui/resultPanel';
+import { celebrate, shake } from './ui/celebrate';
+import {
+  lessonHtml,
+  masterHtml,
+  memberInfoHtml,
+  reflectionForm,
+  resultDetailHtml,
+  resultHeadHtml,
+  starText,
+} from './ui/resultPanel';
 import { memberCard, nodeCard } from './ui/selectCard';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
@@ -72,6 +81,10 @@ interface TestPlayback {
   outcome: CrossingOutcome;
   playback: CrossingPlayback;
   stars: StarCheck[];
+  /** 試験した橋の金額 */
+  cost: number;
+  /** この試験で★3 の最安記録を更新したか（試験が終わったときに決まる） */
+  newRecord?: boolean;
 }
 
 type Drawer = 'tools' | 'info';
@@ -222,7 +235,8 @@ function showStageSelect(): void {
   const nextStage = STAGES.find((s) => progress.starsFor(s.id) === 0);
   const groups = stageGroups(
     [...STAGES, SANDBOX_STAGE],
-    (s) => (isSandbox(s) ? '' : starText(progress.starsFor(s.id))),
+    (s) =>
+      isSandbox(s) ? '' : stageRecordHtml(starText(progress.starsFor(s.id)), progress.bestCostFor(s.id), s.masterCost),
     nextStage?.id,
     openStage,
   );
@@ -457,8 +471,9 @@ function startTest(): void {
   closeDrawer();
   setPredicting(false);
   const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
-  const stars = rateAttempt(outcome, design.totalCost(), stage.budget);
-  playTest({ outcome, playback: new CrossingPlayback(outcome), stars });
+  const cost = design.totalCost();
+  const stars = rateAttempt(outcome, cost, stage.budget);
+  playTest({ outcome, playback: new CrossingPlayback(outcome), stars, cost });
 }
 
 /** 同じ橋のまま、車がわたる様子をはじめから見直す */
@@ -488,7 +503,12 @@ function playAnimation(test: TestPlayback, previousTime: number): void {
 
     // タブを切りかえたあとなどに、一気に進みすぎないようにする
     const seconds = Math.min(0.1, (now - previousTime) / 1000);
+    const wasDriving = test.playback.phase === 'driving';
     test.playback.advance(seconds);
+    // 車が止まって橋がこわれ始めた瞬間に、画面をゆらす
+    if (wasDriving && test.playback.phase !== 'driving' && test.outcome.status !== 'crossed') {
+      shake($('canvas-wrap'));
+    }
 
     if (test.playback.finished) {
       finishTest(test);
@@ -500,7 +520,10 @@ function playAnimation(test: TestPlayback, previousTime: number): void {
 }
 
 function finishTest(test: TestPlayback): void {
-  if (!isSandbox(stage)) progress.record(stage.id, countStars(test.stars));
+  // 「もう一度見る」では、同じ試験をもう一度記録しない
+  if (!isSandbox(stage) && test.newRecord === undefined) {
+    test.newRecord = progress.record(stage.id, countStars(test.stars), test.cost);
+  }
   // わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる
   if (test.outcome.status === 'crossed') {
     test.playback.showHardestMoment();
@@ -668,6 +691,21 @@ function updateCost(): void {
   const meter = $('cost-meter');
   meter.style.width = `${Math.min(100, (cost / stage.budget) * 100)}%`;
   meter.classList.toggle('over', cost > stage.budget);
+  showMasterLine();
+}
+
+/** ★3 のあとの目標として、名人ラインを金額のメーターに出す。名人ラインをクリアしたステージでは色を変える */
+function showMasterLine(): void {
+  const label = $('master-line');
+  const mark = $('master-mark');
+  const { masterCost } = stage;
+  label.hidden = mark.hidden = masterCost === undefined;
+  if (masterCost === undefined) return;
+
+  const best = progress.bestCostFor(stage.id);
+  label.textContent = `名人ライン ${yen(masterCost)}` + (best !== undefined && best <= masterCost ? ' クリア！' : '');
+  label.classList.toggle('got', best !== undefined && best <= masterCost);
+  mark.style.left = `${(masterCost / stage.budget) * 100}%`;
 }
 
 function updateInfoPanel(): void {
@@ -706,6 +744,9 @@ function updateResult(): void {
   const prediction = scorePredictions(state.guesses, test.playback.currentMembers);
   const stars = isSandbox(stage) ? null : test.stars;
   box.innerHTML = resultHeadHtml(explanation, stars);
+  if (stars && countStars(stars) === 3 && stage.masterCost !== undefined) {
+    box.insertAdjacentHTML('beforeend', masterHtml(test.cost, stage.masterCost, test.newRecord ?? false));
+  }
 
   // 次に押すボタンは、スクロールしなくても見える所に置く
   const nextStage = STAGES[STAGES.indexOf(stage) + 1];
@@ -715,9 +756,12 @@ function updateResult(): void {
   box.append(choiceButton('ふりかえりを書く', false, () => openReflection(test, explanation.title), 'secondary small'));
   if (test.outcome.status === 'crossed' && stage.lesson) box.insertAdjacentHTML('beforeend', lessonHtml(stage.lesson));
   box.insertAdjacentHTML('beforeend', resultDetailHtml(explanation, stars, prediction));
+  // 星がポンと出る動きは、結果が出た最初の 1 回だけ（部材をタップして書きかえたときはしない）
+  box.classList.toggle('appear', wasHidden);
   if (wasHidden) {
     if (phoneLayout.matches) openDrawer('info');
     box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (stars && countStars(stars) === 3) celebrate($('canvas-wrap'));
   }
 }
 
@@ -756,9 +800,12 @@ function reportLines(test: TestPlayback): string[] {
   const score = scorePredictions(state.guesses, test.playback.currentMembers);
   return [
     `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
-    `使った金額：${yen(design.totalCost())}（予算 ${yen(stage.budget)}）`,
+    `使った金額：${yen(test.cost)}（予算 ${yen(stage.budget)}）`,
     `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
     ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),
+    ...(isMasterBuild(countStars(test.stars), test.cost, stage.masterCost)
+      ? [`名人ライン（${yen(stage.masterCost!)}）をクリア`]
+      : []),
     ...(score.total > 0 ? [`力の予想：${score.total} 本中 ${score.correct} 本正解`] : []),
   ];
 }

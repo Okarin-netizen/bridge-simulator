@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SAFE_UTILIZATION, utilizationPercent } from '../src/game/score';
+import { isMasterBuild, Progress, SAFE_UTILIZATION, utilizationPercent } from '../src/game/score';
 
 describe('負担率の表示', () => {
   it('切り上げるので、70% をこえたら 71% と表示する', () => {
@@ -16,5 +16,27 @@ describe('負担率の表示', () => {
     for (let u = 0.6; u < 0.8; u += 0.0007) {
       expect(utilizationPercent(u) <= 70).toBe(u <= SAFE_UTILIZATION + 1e-9);
     }
+  });
+});
+
+describe('最安記録と名人ライン', () => {
+  it('★3 を取ったときだけ、安くなったら最安記録を更新する', () => {
+    const progress = new Progress();
+    expect(progress.record('1-1', 2, 5_000)).toBe(false);
+    expect(progress.bestCostFor('1-1')).toBeUndefined();
+
+    expect(progress.record('1-1', 3, 9_000)).toBe(true);
+    expect(progress.record('1-1', 3, 9_500)).toBe(false);
+    expect(progress.record('1-1', 3, 9_000)).toBe(false);
+    expect(progress.record('1-1', 3, 8_800)).toBe(true);
+    expect(progress.bestCostFor('1-1')).toBe(8_800);
+    expect(progress.starsFor('1-1')).toBe(3);
+  });
+
+  it('★3 を名人ライン以下の金額で取ったら名人', () => {
+    expect(isMasterBuild(3, 9_400, 9_400)).toBe(true);
+    expect(isMasterBuild(3, 9_401, 9_400)).toBe(false);
+    expect(isMasterBuild(2, 5_000, 9_400)).toBe(false);
+    expect(isMasterBuild(3, 5_000, undefined)).toBe(false);
   });
 });

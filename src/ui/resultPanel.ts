@@ -46,12 +46,24 @@ export function resultHeadHtml(explanation: Explanation, stars: StarCheck[] | nu
   return `${bigStars}<h3>${explanation.title}</h3>`;
 }
 
-/** 星の内わけ・予想の当たり・説明・次のヒント */
+/**
+ * ★3 を取れたときに、名人ラインと比べた一言を出す。
+ * ★3 のあとも「もっと安く」と遊び続けられるように、次の目標を目の前に見せる
+ */
+export function masterHtml(cost: number, masterCost: number, newRecord: boolean): string {
+  const record = newRecord ? '<span class="new-record">新記録！</span>' : '';
+  if (cost <= masterCost) {
+    return `<p class="master cleared">${record}<b>名人ライン クリア！</b> ${yen(cost)}（名人ライン ${yen(masterCost)}）</p>`;
+  }
+  return `<p class="master">${record}名人ライン ${yen(masterCost)} まで、あと <b>${yen(cost - masterCost)}</b>。もっと安くできるかな？</p>`;
+}
+
 /** わたり切ったときに出す、そのステージで「わかったこと」 */
 export function lessonHtml(lesson: string): string {
   return `<div class="lesson"><b>わかったこと</b><p>${lesson}</p></div>`;
 }
 
+/** 星の内わけ・予想の当たり・説明・次のヒント */
 export function resultDetailHtml(
   explanation: Explanation,
   stars: StarCheck[] | null,
