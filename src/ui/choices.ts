@@ -54,10 +54,6 @@ export function sectionButtons(
   });
 }
 
-/**
- * ステージを選ぶ画面。章ごとにまとめて並べる。
- * starsOf は取った星の表示（実験モードは空文字）、nextId は「つぎはここ」の印を付けるステージ。
- */
 export interface StageRecord {
   stars: string;
   /** ★3 を取れたいちばん安い金額 */
@@ -80,6 +76,10 @@ export function stageRecordHtml({ stars, bestCost, masterCost, perfectPrediction
   return `${stars}<span class="card-record">${record}${badges.join('')}</span>`;
 }
 
+/**
+ * ステージを選ぶ画面。章ごとにまとめて並べる。
+ * recordOf はカードの下に出す星と記録（実験モードは空文字）、nextId は「つぎはここ」の印を付けるステージ。
+ */
 export function stageGroups(
   stages: Stage[],
   recordOf: (stage: Stage) => string,
