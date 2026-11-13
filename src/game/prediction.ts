@@ -20,6 +20,11 @@ export function nextGuess(current: Guess | undefined): Guess | undefined {
   return undefined;
 }
 
+/** すべての部材を予想して、全部当てたか */
+export function isPerfectPrediction(score: PredictionScore, memberCount: number): boolean {
+  return memberCount > 0 && score.total === memberCount && score.wrongIds.length === 0;
+}
+
 /** 試験の結果と予想を照らし合わせる */
 export function scorePredictions(guesses: Map<string, Guess>, results: MemberResult[]): PredictionScore {
   const largest = Math.max(0, ...results.map((r) => Math.abs(r.axial)));
