@@ -27,8 +27,13 @@
       </ol>
       <div class="spacer"></div>
       <div class="budget">
-        <div class="budget-label"><span>使った金額</span><span><b id="cost">¥0</b> / <span id="budget"></span></span></div>
-        <div class="meter"><div class="meter-fill" id="cost-meter"></div></div>
+        <div class="budget-label">
+          <span>使った金額</span>
+          <span><b id="cost">¥0</b> / <span id="budget"></span></span>
+        </div>
+        <!-- 名人ラインの位置に、目盛りの線を引く -->
+        <div class="meter cost-meter"><div class="meter-fill" id="cost-meter"></div><div class="master-mark" id="master-mark"></div></div>
+        <div class="master-line" id="master-line"></div>
       </div>
       <label class="vehicle">
         <span>わたる車</span>
@@ -70,7 +75,7 @@
           <span class="goal-text" id="goal-text"></span>
           <ul class="goal-stars" id="goal-stars"></ul>
         </div>
-        <div class="canvas-wrap">
+        <div class="canvas-wrap" id="canvas-wrap">
           <canvas id="canvas"></canvas>
           <div class="select-card" id="select-card" hidden></div>
           <div class="toast" id="toast" hidden></div>

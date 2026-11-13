@@ -58,9 +58,19 @@ export function sectionButtons(
  * ステージを選ぶ画面。章ごとにまとめて並べる。
  * starsOf は取った星の表示（実験モードは空文字）、nextId は「つぎはここ」の印を付けるステージ。
  */
+/** ステージ一覧のカードの下に出す、星と最安記録。名人ラインをこえていたら「名人」の印を付ける */
+export function stageRecordHtml(stars: string, bestCost: number | undefined, masterCost: number | undefined): string {
+  if (bestCost === undefined) return stars;
+  const master = masterCost !== undefined && bestCost <= masterCost;
+  return (
+    `${stars}<span class="card-record">記録 ${yen(bestCost)}` +
+    `${master ? '<b class="master-badge">名人</b>' : ''}</span>`
+  );
+}
+
 export function stageGroups(
   stages: Stage[],
-  starsOf: (stage: Stage) => string,
+  recordOf: (stage: Stage) => string,
   nextId: string | undefined,
   onOpen: (stage: Stage) => void,
 ): HTMLElement[] {
@@ -75,19 +85,19 @@ export function stageGroups(
     heading.textContent = chapter;
     const cards = document.createElement('div');
     cards.className = 'chapter-cards';
-    cards.append(...inChapter.map((stage) => stageCard(stage, starsOf(stage), stage.id === nextId, () => onOpen(stage))));
+    cards.append(...inChapter.map((stage) => stageCard(stage, recordOf(stage), stage.id === nextId, () => onOpen(stage))));
 
     group.append(heading, cards);
     return group;
   });
 }
 
-function stageCard(stage: Stage, stars: string, isNext: boolean, onOpen: () => void): HTMLButtonElement {
+function stageCard(stage: Stage, record: string, isNext: boolean, onOpen: () => void): HTMLButtonElement {
   return choiceButton(
     (isNext ? '<span class="card-next">つぎはここ</span>' : '') +
       stageThumbnail(stage) +
       `<span class="card-title">${stage.title}</span>` +
-      `<span class="card-goal">${stage.goal}</span><span class="card-stars">${stars}</span>`,
+      `<span class="card-goal">${stage.goal}</span><span class="card-stars">${record}</span>`,
     false,
     onOpen,
     isNext ? 'stage-card next' : 'stage-card',

@@ -166,6 +166,50 @@ h2 {
   overflow: hidden;
 }
 
+.cost-meter {
+  position: relative;
+}
+
+.master-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1px;
+  background: #d98a00;
+}
+
+.master-mark[hidden] {
+  display: none;
+}
+
+.master-line {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #9a5b00;
+}
+
+/* メーターの線と同じ色の印を、文字の前に付ける */
+.master-line::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 10px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  background: #d98a00;
+}
+
+.master-line[hidden] {
+  display: none;
+}
+
+.master-line.got {
+  color: #d98a00;
+}
+
 .meter.tall {
   height: 14px;
 }
@@ -381,6 +425,44 @@ h2 {
   position: relative;
   flex-grow: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+/* こわれた瞬間のゆれ。はじめ大きく、すぐにおさまる */
+.canvas-wrap.shake {
+  animation: shake 0.35s ease-out;
+}
+
+@keyframes shake {
+  0% { transform: translate(0, 0); }
+  15% { transform: translate(-7px, 4px); }
+  30% { transform: translate(6px, -3px); }
+  50% { transform: translate(-4px, 2px); }
+  70% { transform: translate(2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ★3 の紙ふぶき（ui/celebrate.ts が作る） */
+.confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti i {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confetti-fall linear forwards;
+}
+
+@keyframes confetti-fall {
+  to {
+    transform: translate(var(--drift), 110vh) rotate(var(--spin));
+  }
 }
 
 canvas {
@@ -625,6 +707,56 @@ canvas {
 
 .result-stars .got {
   color: #d98a00;
+}
+
+/* 結果が出たとき、取れた星を 1 つずつポンと出す */
+.result.appear .result-stars span {
+  display: inline-block;
+  animation: star-pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1) backwards;
+}
+
+.result.appear .result-stars span:nth-child(2) {
+  animation-delay: 0.25s;
+}
+
+.result.appear .result-stars span:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+@keyframes star-pop {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+}
+
+.result .master {
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.result .master.cleared {
+  background: #d98a00;
+  color: #fff;
+}
+
+.new-record {
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result.appear .result-stars span {
+    animation: none;
+  }
 }
 
 .result .small {
@@ -922,6 +1054,23 @@ canvas {
   font-size: 18px;
   color: #b7791f;
   letter-spacing: 2px;
+}
+
+.card-record {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.master-badge {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #d98a00;
+  color: #fff;
+  font-size: 11px;
 }
 
 /* ふりかえりを書く画面 */

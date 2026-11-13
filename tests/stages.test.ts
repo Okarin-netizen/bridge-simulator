@@ -37,6 +37,8 @@ function expectThreeStars(design: BridgeDesign) {
   expect(outcome.status).toBe('crossed');
   expect(design.totalCost()).toBeLessThanOrEqual(design.stage.budget);
   expect(outcome.maxUtilization).toBeLessThanOrEqual(SAFE_UTILIZATION);
+  // 模範解答は名人ラインをクリアできる（名人ラインは模範解答の値段を切り上げたもの）
+  expect(design.totalCost()).toBeLessThanOrEqual(design.stage.masterCost!);
 }
 
 /** プラット・トラス（パネル幅 4 m）の部材。height をマイナスにすると道路の下に組む */
@@ -95,15 +97,15 @@ describe('ステージには答えがある', () => {
     expectThreeStars(design);
   });
 
-  it('2-3：道路より上には置けないが、下に組んだトラスでわたれる', () => {
-    const stage = stageById('2-3');
+  it('2-2：道路より上には置けないが、下に組んだトラスでわたれる', () => {
+    const stage = stageById('2-2');
     expect(new BridgeDesign(stage).connect({ x: 0, y: 0 }, { x: 4, y: 4 }, 'wood', 'square')).not.toBeNull();
 
     expectThreeStars(build(stage, pratt(16, -4)));
   });
 
-  it('2-2：24 m の谷も予算の中でわたれる。道路の下に組むと余裕が出る', () => {
-    const stage = stageById('2-2');
+  it('2-3：24 m の谷も予算の中でわたれる。道路の下に組むと余裕が出る', () => {
+    const stage = stageById('2-3');
     const above = build(stage, pratt(24));
     expect(test(above).status).toBe('crossed');
     expect(test(above).maxUtilization).toBeGreaterThan(SAFE_UTILIZATION);
@@ -185,5 +187,14 @@ describe('ステージには答えがある', () => {
 describe('わかったこと', () => {
   it('どのステージにも、わたり切ったときに見せる「わかったこと」がある', () => {
     for (const stage of STAGES) expect(stage.lesson, stage.id).toBeTruthy();
+  });
+});
+
+describe('名人ライン', () => {
+  it('どのステージにも名人ラインがあり、予算より高くない', () => {
+    for (const stage of STAGES) {
+      expect(stage.masterCost, stage.id).toBeDefined();
+      expect(stage.masterCost!, stage.id).toBeLessThanOrEqual(stage.budget);
+    }
   });
 });

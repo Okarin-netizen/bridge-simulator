@@ -34,6 +34,11 @@ export interface Stage {
   /** 1 本の部材の最大の長さ（m） */
   maxMemberLength: number;
   budget: number;
+  /**
+   * 名人ライン（円）。★3 をこの金額以下で取れたら「名人」。
+   * 模範解答（tests/stages.test.ts）の値段を、切りのよい数に切り上げたもの。実験モードにはない
+   */
+  masterCost?: number;
   /** わたる車の id。null なら生徒が選べる（実験モード） */
   vehicleId: string | null;
   materials: MaterialId[];
@@ -92,6 +97,7 @@ export const STAGES: Stage[] = [
     lesson: '道路だけの橋は形を保てない。上や下から支える部材を足すと、車の重さを岸まで伝えられる。',
     span: 8,
     budget: 12_000,
+    masterCost: 9_400,
     vehicleId: 'kei',
   }),
   defineStage({
@@ -103,6 +109,7 @@ export const STAGES: Stage[] = [
     lesson: '1 本の部材は長くできないので、短い部材を三角形に組み合わせて、長い谷をわたる。',
     span: 16,
     budget: 30_000,
+    masterCost: 23_500,
     vehicleId: 'car',
   }),
   defineStage({
@@ -114,6 +121,7 @@ export const STAGES: Stage[] = [
     lesson: '三角形は、つなぎ目が回っても形が変わらない。三角形を組み合わせた骨組みを「トラス構造」という。四角形に入れた斜めの部材は、建物の「筋かい」と同じ役目。',
     span: 16,
     budget: 30_000,
+    masterCost: 23_500,
     vehicleId: 'car',
     presetMembers: [
       ...[0, 4, 8, 12].map((x): PresetMember => ({ from: [x, 0], to: [x + 4, 0] })),
@@ -126,25 +134,27 @@ export const STAGES: Stage[] = [
   defineStage({
     id: '2-2',
     chapter: '第2章　三角形のひみつ',
-    title: '2-2　予算をまもって',
-    goal: '予算の中で、乗用車をわたらせよう',
-    hint: '三角形をうまく並べると、少ない部材で強い橋になるよ。',
-    lesson: '同じお金でも、組み方を変えると強さが変わる。むだな部材を減らして、安くて強い形を探すのが設計。',
-    span: 24,
-    budget: 38_000,
-    vehicleId: 'car',
-  }),
-  defineStage({
-    id: '2-3',
-    chapter: '第2章　三角形のひみつ',
-    title: '2-3　上に組めない橋',
+    title: '2-2　上に組めない橋',
     goal: '道路より上に部材を置かずに、乗用車をわたらせよう',
     hint: '上がだめなら下がある。三角形は道路の下に組んでもいいよ。',
     lesson: 'トラスは道路の下に組んでもよい。上に組んでも下に組んでも、上側の部材は押され、下側の部材は引っぱられる。',
     span: 16,
     budget: 30_000,
+    masterCost: 23_500,
     vehicleId: 'car',
     buildArea: { minX: 0, maxX: 16, minY: -6, maxY: 0 },
+  }),
+  defineStage({
+    id: '2-3',
+    chapter: '第2章　三角形のひみつ',
+    title: '2-3　予算をまもって',
+    goal: '予算の中で、乗用車をわたらせよう',
+    hint: '24 m の谷は長いので、予算ぎりぎり。道路の上と下、どちらに組むと余裕が出るかな？',
+    lesson: '同じお金でも、組み方を変えると強さが変わる。むだな部材を減らして、安くて強い形を探すのが設計。',
+    span: 24,
+    budget: 38_000,
+    masterCost: 37_600,
+    vehicleId: 'car',
   }),
   defineStage({
     id: '3-1',
@@ -155,6 +165,7 @@ export const STAGES: Stage[] = [
     lesson: '押される細長い部材は、急に横へ曲がる（座屈）。押される部材には、どの向きにも曲がりにくいパイプが向く。',
     span: 16,
     budget: 60_000,
+    masterCost: 36_400,
     vehicleId: 'bus',
     materials: ['wood', 'steel'],
     sections: ['square', 'pipe', 'hbeam'],
@@ -169,6 +180,7 @@ export const STAGES: Stage[] = [
     lesson: 'つなぎ目を固める「剛接合」にすると、斜めの部材がなくても四角形がくずれない。これを「ラーメン構造」といい、校舎の柱と梁と同じしくみ。部材が曲げられるので、トラスより材料がたくさんいる。',
     span: 12,
     budget: 80_000,
+    masterCost: 52_200,
     vehicleId: 'car',
     materials: ['wood', 'steel'],
     sections: ['square', 'pipe', 'hbeam'],
@@ -184,6 +196,7 @@ export const STAGES: Stage[] = [
     lesson: '材料は適材適所で使う。強いけれど高い鋼材は、大きな力で押される部材にだけ使う。',
     span: 16,
     budget: 80_000,
+    masterCost: 68_800,
     vehicleId: 'truck',
     materials: ['wood', 'steel'],
     sections: ['square', 'pipe', 'hbeam'],
@@ -197,6 +210,7 @@ export const STAGES: Stage[] = [
     lesson: '形（三角形）・断面・材料の工夫を組み合わせると、少ないお金で強い橋ができる。',
     span: 24,
     budget: 110_000,
+    masterCost: 103_000,
     vehicleId: 'bus',
     materials: ['wood', 'steel', 'aluminum'],
     sections: ['square', 'pipe', 'hbeam'],

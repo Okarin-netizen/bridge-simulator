@@ -41,32 +41,59 @@ export function countStars(checks: StarCheck[]): number {
   return checks.filter((check) => check.achieved).length;
 }
 
-const STORAGE_KEY = 'kakehashi-lab:best-stars';
+/**
+ * ★3 を名人ライン以下の金額で取れたか。
+ * 削るほど安くなるが、削りすぎるとこわれたり★3 の余裕がなくなったりする。その駆け引きのごほうび
+ */
+export function isMasterBuild(stars: number, cost: number, masterCost: number | undefined): boolean {
+  return masterCost !== undefined && stars === 3 && cost <= masterCost;
+}
 
-/** ステージごとの最高の星の数を、この端末に保存する */
+const STARS_KEY = 'kakehashi-lab:best-stars';
+const COST_KEY = 'kakehashi-lab:best-cost';
+
+/** ステージごとの最高の星の数と、★3 を取れたいちばん安い金額（最安記録）を、この端末に保存する */
 export class Progress {
-  private best: Record<string, number> = {};
-
-  constructor() {
-    try {
-      this.best = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    } catch {
-      // 保存できない環境（プライベートブラウズなど）でも遊べるようにする
-      this.best = {};
-    }
-  }
+  private bestStars: Record<string, number> = load(STARS_KEY);
+  private bestCost: Record<string, number> = load(COST_KEY);
 
   starsFor(stageId: string): number {
-    return this.best[stageId] ?? 0;
+    return this.bestStars[stageId] ?? 0;
   }
 
-  record(stageId: string, stars: number): void {
-    if (stars <= this.starsFor(stageId)) return;
-    this.best[stageId] = stars;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.best));
-    } catch {
-      // 保存に失敗しても、遊んでいる間は覚えておく
+  /** ★3 を取れたいちばん安い金額。まだ★3 を取っていなければ undefined */
+  bestCostFor(stageId: string): number | undefined {
+    return this.bestCost[stageId];
+  }
+
+  /** 試験の結果を記録する。★3 の最安記録を更新したら true を返す */
+  record(stageId: string, stars: number, cost: number): boolean {
+    if (stars > this.starsFor(stageId)) {
+      this.bestStars[stageId] = stars;
+      save(STARS_KEY, this.bestStars);
     }
+
+    const best = this.bestCostFor(stageId);
+    if (stars < 3 || (best !== undefined && cost >= best)) return false;
+    this.bestCost[stageId] = cost;
+    save(COST_KEY, this.bestCost);
+    return true;
+  }
+}
+
+function load(key: string): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? '{}');
+  } catch {
+    // 保存できない環境（プライベートブラウズなど）でも遊べるようにする
+    return {};
+  }
+}
+
+function save(key: string, value: Record<string, number>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 保存に失敗しても、遊んでいる間は覚えておく
   }
 }

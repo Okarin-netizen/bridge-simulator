@@ -13,6 +13,7 @@ function stageCard(stage: Stage): HTMLElement {
     `谷の幅 ${stage.span} m`,
     vehicle ? `${vehicle.name}（${tons(vehicle.mass)}）` : '車は自由',
     `予算 ${yen(stage.budget)}`,
+    ...(stage.masterCost === undefined ? [] : [`名人ライン ${yen(stage.masterCost)}`]),
     `材料：${stage.materials.map((id) => MATERIALS[id].name).join('・')}`,
     `断面：${stage.sections.map((id) => SECTIONS[id].name).join('・')}`,
   ];
