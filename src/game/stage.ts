@@ -39,6 +39,8 @@ export interface Stage {
    * 模範解答（tests/stages.test.ts）の値段を、切りのよい数に切り上げたもの。実験モードにはない
    */
   masterCost?: number;
+  /** わたり切ったときに「くらべてみよう」として出す、ちがう作り方の橋とその値段（tests/stages.test.ts で確かめた形） */
+  comparison?: { label: string; cost: number };
   /** わたる車の id。null なら生徒が選べる（実験モード） */
   vehicleId: string | null;
   materials: MaterialId[];
@@ -186,6 +188,7 @@ export const STAGES: Stage[] = [
     sections: ['square', 'pipe', 'hbeam'],
     allowRigidJoints: true,
     allowDiagonals: false,
+    comparison: { label: '斜めの部材を使ったトラス（木材・角材）', cost: 16_389 },
   }),
   defineStage({
     id: '3-3',

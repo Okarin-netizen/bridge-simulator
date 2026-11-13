@@ -190,6 +190,17 @@ describe('わかったこと', () => {
   });
 });
 
+describe('くらべてみよう', () => {
+  it('3-2：同じ谷を斜めの部材ありのトラスで作ると、ラーメン構造よりずっと安くわたれる', () => {
+    const rameStage = stageById('3-2');
+    // 斜めの部材を使える以外は 3-2 と同じ条件で、1-2 と同じ形のトラスを組む
+    const trussStage = { ...rameStage, allowDiagonals: true };
+    const truss = build(trussStage, pratt(12));
+    expect(truss.totalCost()).toBe(rameStage.comparison!.cost);
+    expectThreeStars(truss);
+  });
+});
+
 describe('名人ライン', () => {
   it('どのステージにも名人ラインがあり、予算より高くない', () => {
     for (const stage of STAGES) {

@@ -841,6 +841,19 @@ canvas {
   margin: 4px 0 0;
 }
 
+/* ちがう作り方の橋との値段のくらべ */
+.compare {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 4px solid #3b6fd8;
+  border-radius: 8px;
+  background: #eaf0fb;
+}
+
+.compare p {
+  margin: 4px 0 0;
+}
+
 .prediction-score {
   margin: 8px 0;
   padding: 8px 10px;
@@ -1065,12 +1078,19 @@ canvas {
   color: var(--muted);
 }
 
-.master-badge {
+.badge {
   padding: 0 6px;
   border-radius: 4px;
-  background: #d98a00;
   color: #fff;
   font-size: 11px;
+}
+
+.badge.master {
+  background: #d98a00;
+}
+
+.badge.prediction {
+  background: #3b6fd8;
 }
 
 /* ふりかえりを書く画面 */

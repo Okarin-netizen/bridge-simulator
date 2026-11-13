@@ -54,20 +54,32 @@ export function sectionButtons(
   });
 }
 
-/**
- * ステージを選ぶ画面。章ごとにまとめて並べる。
- * starsOf は取った星の表示（実験モードは空文字）、nextId は「つぎはここ」の印を付けるステージ。
- */
-/** ステージ一覧のカードの下に出す、星と最安記録。名人ラインをこえていたら「名人」の印を付ける */
-export function stageRecordHtml(stars: string, bestCost: number | undefined, masterCost: number | undefined): string {
-  if (bestCost === undefined) return stars;
-  const master = masterCost !== undefined && bestCost <= masterCost;
-  return (
-    `${stars}<span class="card-record">記録 ${yen(bestCost)}` +
-    `${master ? '<b class="master-badge">名人</b>' : ''}</span>`
-  );
+export interface StageRecord {
+  stars: string;
+  /** ★3 を取れたいちばん安い金額 */
+  bestCost?: number;
+  masterCost?: number;
+  /** 力の予想を全部当てたか */
+  perfectPrediction: boolean;
 }
 
+/** ステージ一覧のカードの下に出す、星と最安記録と印。名人ライン以下なら「名人」、予想を全部当てたら「予想ぴたり」 */
+export function stageRecordHtml({ stars, bestCost, masterCost, perfectPrediction }: StageRecord): string {
+  const badges: string[] = [];
+  if (bestCost !== undefined && masterCost !== undefined && bestCost <= masterCost) {
+    badges.push('<b class="badge master">名人</b>');
+  }
+  if (perfectPrediction) badges.push('<b class="badge prediction">予想ぴたり</b>');
+  if (bestCost === undefined && badges.length === 0) return stars;
+
+  const record = bestCost === undefined ? '' : `記録 ${yen(bestCost)}`;
+  return `${stars}<span class="card-record">${record}${badges.join('')}</span>`;
+}
+
+/**
+ * ステージを選ぶ画面。章ごとにまとめて並べる。
+ * recordOf はカードの下に出す星と記録（実験モードは空文字）、nextId は「つぎはここ」の印を付けるステージ。
+ */
 export function stageGroups(
   stages: Stage[],
   recordOf: (stage: Stage) => string,

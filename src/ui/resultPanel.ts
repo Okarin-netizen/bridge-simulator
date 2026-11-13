@@ -58,6 +58,16 @@ export function masterHtml(cost: number, masterCost: number, newRecord: boolean)
   return `<p class="master">${record}名人ライン ${yen(masterCost)} まで、あと <b>${yen(cost - masterCost)}</b>。もっと安くできるかな？</p>`;
 }
 
+/** わたり切ったときに、ちがう作り方の橋の値段とくらべる */
+export function comparisonHtml(cost: number, comparison: { label: string; cost: number }): string {
+  const ratio = cost / comparison.cost;
+  const times = ratio >= 1.5 ? `（約 ${ratio.toFixed(1)} 倍）` : '';
+  return (
+    `<div class="compare"><b>くらべてみよう</b><p>${comparison.label}なら、同じ谷を ${yen(comparison.cost)} でわたれる。` +
+    `この橋は ${yen(cost)}${times}。</p></div>`
+  );
+}
+
 /** わたり切ったときに出す、そのステージで「わかったこと」 */
 export function lessonHtml(lesson: string): string {
   return `<div class="lesson"><b>わかったこと</b><p>${lesson}</p></div>`;
@@ -68,6 +78,7 @@ export function resultDetailHtml(
   explanation: Explanation,
   stars: StarCheck[] | null,
   prediction: PredictionScore,
+  perfectPrediction: boolean,
 ): string {
   const starList = stars
     ? `<ul class="stars">${stars
@@ -75,14 +86,16 @@ export function resultDetailHtml(
         .join('')}</ul>`
     : '';
   return (
-    `${starList}${predictionHtml(prediction)}<p>${explanation.body}</p>` +
+    `${starList}${predictionHtml(prediction, perfectPrediction)}<p>${explanation.body}</p>` +
     `<b>次はこうしてみよう</b><ul>${explanation.hints.map((h) => `<li>${h}</li>`).join('')}</ul>`
   );
 }
 
-function predictionHtml(score: PredictionScore): string {
+function predictionHtml(score: PredictionScore, perfect: boolean): string {
   if (score.total === 0) return '';
-  const note = score.wrongIds.length > 0 ? '（はずれた部材に × がついています）' : '（ぜんぶ正解！）';
+  let note = '（ぜんぶ正解！ 全部の部材を予想すると「予想ぴたり」の印がもらえるよ）';
+  if (score.wrongIds.length > 0) note = '（はずれた部材に × がついています）';
+  else if (perfect) note = '（全部の部材を当てた！ ステージ一覧に「予想ぴたり」の印がつきます）';
   return `<p class="prediction-score">力の予想：${score.total} 本中 ${score.correct} 本正解${note}</p>`;
 }
 

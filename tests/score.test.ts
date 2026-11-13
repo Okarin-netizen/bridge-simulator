@@ -33,6 +33,14 @@ describe('最安記録と名人ライン', () => {
     expect(progress.starsFor('1-1')).toBe(3);
   });
 
+  it('予想を全部当てたステージを覚えておく', () => {
+    const progress = new Progress();
+    expect(progress.hasPerfectPrediction('1-1')).toBe(false);
+    progress.recordPerfectPrediction('1-1');
+    expect(progress.hasPerfectPrediction('1-1')).toBe(true);
+    expect(progress.hasPerfectPrediction('1-2')).toBe(false);
+  });
+
   it('★3 を名人ライン以下の金額で取ったら名人', () => {
     expect(isMasterBuild(3, 9_400, 9_400)).toBe(true);
     expect(isMasterBuild(3, 9_401, 9_400)).toBe(false);

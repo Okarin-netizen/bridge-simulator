@@ -51,11 +51,17 @@ export function isMasterBuild(stars: number, cost: number, masterCost: number | 
 
 const STARS_KEY = 'kakehashi-lab:best-stars';
 const COST_KEY = 'kakehashi-lab:best-cost';
+const PREDICTION_KEY = 'kakehashi-lab:perfect-prediction';
 
-/** ステージごとの最高の星の数と、★3 を取れたいちばん安い金額（最安記録）を、この端末に保存する */
+/**
+ * ステージごとの最高の星の数と、★3 を取れたいちばん安い金額（最安記録）と、
+ * 力の予想を全部当てたかを、この端末に保存する
+ */
 export class Progress {
   private bestStars: Record<string, number> = load(STARS_KEY);
   private bestCost: Record<string, number> = load(COST_KEY);
+  /** 予想を全部当てたステージ（値はいつも 1） */
+  private perfectPredictions: Record<string, number> = load(PREDICTION_KEY);
 
   starsFor(stageId: string): number {
     return this.bestStars[stageId] ?? 0;
@@ -78,6 +84,16 @@ export class Progress {
     this.bestCost[stageId] = cost;
     save(COST_KEY, this.bestCost);
     return true;
+  }
+
+  hasPerfectPrediction(stageId: string): boolean {
+    return this.perfectPredictions[stageId] === 1;
+  }
+
+  recordPerfectPrediction(stageId: string): void {
+    if (this.hasPerfectPrediction(stageId)) return;
+    this.perfectPredictions[stageId] = 1;
+    save(PREDICTION_KEY, this.perfectPredictions);
   }
 }
 

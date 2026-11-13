@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemberResult } from '../src/engine/types';
-import { nextGuess, scorePredictions } from '../src/game/prediction';
+import { isPerfectPrediction, nextGuess, scorePredictions } from '../src/game/prediction';
 import type { Guess } from '../src/game/prediction';
 
 function result(id: string, axial: number): MemberResult {
@@ -30,5 +30,16 @@ describe('力の予想', () => {
     const guesses = new Map<string, Guess>([['zero', 'compression']]);
     const score = scorePredictions(guesses, [result('main', -20_000), result('zero', 50)]);
     expect(score.correct).toBe(1);
+  });
+});
+
+describe('予想ぴたり', () => {
+  const score = (total: number, wrong: number) => ({ total, correct: total - wrong, wrongIds: Array(wrong).fill('m') });
+
+  it('すべての部材を予想して全部当てたときだけ、予想ぴたり', () => {
+    expect(isPerfectPrediction(score(5, 0), 5)).toBe(true);
+    expect(isPerfectPrediction(score(4, 0), 5)).toBe(false);
+    expect(isPerfectPrediction(score(5, 1), 5)).toBe(false);
+    expect(isPerfectPrediction(score(0, 0), 0)).toBe(false);
   });
 });

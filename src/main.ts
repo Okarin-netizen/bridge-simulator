@@ -5,7 +5,7 @@ import { MATERIALS, SECTIONS } from './engine/materials';
 import type { MaterialId, MemberResult, Point, SectionId } from './engine/types';
 import { BridgeDesign } from './game/design';
 import { explainOutcome } from './game/explain';
-import { nextGuess, scorePredictions } from './game/prediction';
+import { isPerfectPrediction, nextGuess, scorePredictions } from './game/prediction';
 import type { Guess } from './game/prediction';
 import { countStars, isMasterBuild, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
@@ -25,6 +25,7 @@ import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
 import { celebrate, shake } from './ui/celebrate';
 import {
+  comparisonHtml,
   lessonHtml,
   masterHtml,
   memberInfoHtml,
@@ -236,7 +237,14 @@ function showStageSelect(): void {
   const groups = stageGroups(
     [...STAGES, SANDBOX_STAGE],
     (s) =>
-      isSandbox(s) ? '' : stageRecordHtml(starText(progress.starsFor(s.id)), progress.bestCostFor(s.id), s.masterCost),
+      isSandbox(s)
+        ? ''
+        : stageRecordHtml({
+            stars: starText(progress.starsFor(s.id)),
+            bestCost: progress.bestCostFor(s.id),
+            masterCost: s.masterCost,
+            perfectPrediction: progress.hasPerfectPrediction(s.id),
+          }),
     nextStage?.id,
     openStage,
   );
@@ -523,6 +531,7 @@ function finishTest(test: TestPlayback): void {
   // 「もう一度見る」では、同じ試験をもう一度記録しない
   if (!isSandbox(stage) && test.newRecord === undefined) {
     test.newRecord = progress.record(stage.id, countStars(test.stars), test.cost);
+    if (predictedPerfectly(test)) progress.recordPerfectPrediction(stage.id);
   }
   // わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる
   if (test.outcome.status === 'crossed') {
@@ -532,6 +541,11 @@ function finishTest(test: TestPlayback): void {
   $<HTMLButtonElement>('replay').disabled = false;
   $('hint').textContent = '部材をタップすると、押されているか引っぱられているかと、力の大きさがわかるよ。';
   refresh();
+}
+
+/** 試験の前に、すべての部材の力の向きを予想して、全部当てたか */
+function predictedPerfectly(test: TestPlayback): boolean {
+  return isPerfectPrediction(scorePredictions(state.guesses, test.playback.currentMembers), design.members.length);
 }
 
 function leaveTest(): void {
@@ -755,7 +769,10 @@ function updateResult(): void {
   }
   box.append(choiceButton('ふりかえりを書く', false, () => openReflection(test, explanation.title), 'secondary small'));
   if (test.outcome.status === 'crossed' && stage.lesson) box.insertAdjacentHTML('beforeend', lessonHtml(stage.lesson));
-  box.insertAdjacentHTML('beforeend', resultDetailHtml(explanation, stars, prediction));
+  if (test.outcome.status === 'crossed' && stage.comparison) {
+    box.insertAdjacentHTML('beforeend', comparisonHtml(test.cost, stage.comparison));
+  }
+  box.insertAdjacentHTML('beforeend', resultDetailHtml(explanation, stars, prediction, predictedPerfectly(test)));
   // 星がポンと出る動きは、結果が出た最初の 1 回だけ（部材をタップして書きかえたときはしない）
   box.classList.toggle('appear', wasHidden);
   if (wasHidden) {
