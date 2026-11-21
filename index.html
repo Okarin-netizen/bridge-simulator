@@ -40,6 +40,8 @@
         <select id="vehicle"></select>
         <b class="vehicle-fixed" id="vehicle-fixed" hidden></b>
       </label>
+      <!-- 教室でいっせいに鳴らないよう、音ははじめ消しておく -->
+      <button type="button" class="back sound-toggle" id="sound" aria-pressed="false">音 オフ</button>
     </header>
 
     <div class="workspace">
@@ -79,6 +81,12 @@
           <canvas id="canvas"></canvas>
           <div class="select-card" id="select-card" hidden></div>
           <div class="toast" id="toast" hidden></div>
+          <!-- 何も置いていないときに、なぞって置くお手本を見せる指 -->
+          <div class="drag-guide" id="drag-guide" hidden aria-hidden="true">
+            <i class="drag-guide-line"></i>
+            <i class="drag-guide-finger"></i>
+            <span class="drag-guide-text">点から点へなぞろう</span>
+          </div>
           <!-- 組み立て中に出す、印の説明 -->
           <div class="symbol-legend">
             <span><svg class="legend-icon" viewBox="6 0 24 30" aria-hidden="true"><circle cx="18" cy="15" r="6" /></svg><b>節点</b>＝部材をつなぐ点</span>

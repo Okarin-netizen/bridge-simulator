@@ -18,6 +18,8 @@ export interface Scene {
   showSectionMarks?: boolean;
   /** 生徒の予想（部材の上に細い線で示す） */
   guesses?: Map<string, Guess>;
+  /** 置いたばかりで、ポンとふくらんでいる節点と、その大きさの倍率 */
+  poppingNodes?: Map<string, number>;
   /** 試験中・試験後の表示 */
   test?: {
     results: Map<string, MemberResult>;
@@ -515,11 +517,12 @@ function drawNodes(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene):
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = COLORS.ink;
     ctx.lineWidth = 2.5;
+    const radius = NODE_RADIUS * (scene.poppingNodes?.get(node.id) ?? 1);
     ctx.beginPath();
     if (node.joint === 'rigid') {
-      ctx.rect(p.x - NODE_RADIUS, p.y - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+      ctx.rect(p.x - radius, p.y - radius, radius * 2, radius * 2);
     } else {
-      ctx.arc(p.x, p.y, NODE_RADIUS, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
     }
     ctx.fill();
     ctx.stroke();

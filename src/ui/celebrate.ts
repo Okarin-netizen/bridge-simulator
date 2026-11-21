@@ -41,3 +41,16 @@ export function celebrate(element: HTMLElement): void {
   element.append(layer);
   setTimeout(() => layer.remove(), CONFETTI_DURATION + 400);
 }
+
+/** 札を出しておく時間（ミリ秒）。動きは style.css の .stamp に書いてある */
+const STAMP_DURATION = 1400;
+
+/** 橋の画面のまん中に、「わたれた！」のような大きな札をポンと出す */
+export function stamp(element: HTMLElement, text: string): void {
+  element.querySelector('.stamp')?.remove();
+  const label = document.createElement('div');
+  label.className = 'stamp';
+  label.textContent = text;
+  element.append(label);
+  setTimeout(() => label.remove(), reducedMotion.matches ? STAMP_DURATION / 2 : STAMP_DURATION);
+}
