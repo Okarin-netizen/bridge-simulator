@@ -60,6 +60,20 @@ describe('走行試験のアニメーション', () => {
     expect(playback.fallDistance).toBeGreaterThan(5);
   });
 
+  it('とばすと、最後まで見たときと同じ終わりの形になる', () => {
+    const outcome = simulateCrossing(triangleBridge(), truck, { roadY: 0 });
+    const watched = new CrossingPlayback(outcome);
+    playToEnd(watched);
+
+    const skipped = new CrossingPlayback(outcome);
+    skipped.advance(0.1);
+    skipped.skipToEnd();
+    expect(skipped.finished).toBe(true);
+    expect(skipped.carX).toBeCloseTo(watched.carX);
+    expect(skipped.fallDistance).toBeCloseTo(watched.fallDistance, 0);
+    expect(skipped.breakStates.map((s) => s.id)).toEqual(watched.breakStates.map((s) => s.id));
+  });
+
   it('たわみは見えるように、きりのよい倍率で大きくする', () => {
     const playback = new CrossingPlayback(simulateCrossing(triangleBridge(), kei, { roadY: 0 }));
     expect([300, 200, 100, 50, 20, 10, 5, 2, 1]).toContain(playback.deflectionScale);

@@ -23,7 +23,8 @@ import { CrossingPlayback } from './ui/playback';
 import { drawScene } from './ui/renderer';
 import type { Scene } from './ui/renderer';
 import { saveReportImage } from './ui/report';
-import { celebrate, shake } from './ui/celebrate';
+import { celebrate, shake, stamp } from './ui/celebrate';
+import { play, setSoundEnabled, soundEnabled } from './ui/sound';
 import {
   comparisonHtml,
   lessonHtml,
@@ -38,6 +39,9 @@ import { memberCard, nodeCard } from './ui/selectCard';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
 const TAP_SLOP = { mouse: 6, touch: 12 };
+/** 置いたばかりの節点がポンとふくらんで、もとの大きさにもどるまでの時間（ミリ秒）と、最初の大きさ */
+const NODE_POP_DURATION = 220;
+const NODE_POP_SCALE = 1.9;
 
 interface Press {
   /** 押し始めた所（画面の px） */
@@ -73,6 +77,8 @@ const state = {
   reflection: '',
   /** 振り返りを書く画面を開いているか */
   reflecting: false,
+  /** 置いたばかりの節点と、置いた時刻（ポンとふくらませるのに使う） */
+  poppedAt: new Map<string, number>(),
 };
 
 /** いまの場面。上のバーの 1〜4 と、右のパネルを出すかどうかがこれで決まる */
@@ -133,7 +139,13 @@ function setupControls(): void {
     }
   });
   $('run-test').addEventListener('click', () => (state.test ? leaveTest() : startTest()));
-  $('replay').addEventListener('click', replayTest);
+  // 車が走っているあいだは「とばす」、見終わったら「もう一度見る」になるボタン
+  $('replay').addEventListener('click', () => (state.test?.playback.finished ? replayTest() : skipTest()));
+  $('sound').addEventListener('click', () => {
+    setSoundEnabled(!soundEnabled());
+    showSoundSetting();
+  });
+  showSoundSetting();
   $('close-reflect').addEventListener('click', closeReflection);
   $('predict').addEventListener('click', () => setPredicting(!state.predicting));
 
@@ -142,6 +154,12 @@ function setupControls(): void {
   for (const button of document.querySelectorAll('[data-close-drawer]')) {
     button.addEventListener('click', closeDrawer);
   }
+}
+
+function showSoundSetting(): void {
+  const button = $('sound');
+  button.setAttribute('aria-pressed', String(soundEnabled()));
+  button.textContent = soundEnabled() ? '音 オン' : '音 オフ';
 }
 
 /** スマホの画面で、左右のパネルを引き出す */
@@ -407,9 +425,39 @@ function placeMember(start: Point, end: Point): void {
   }
   // 部材が節点で区切られて番号が変わることがあるので、選んでいたものは選びなおし
   clearSelection();
+  popNodesAt([start, end]);
+  play('place');
   $('hint').textContent = stage.allowRigidJoints
     ? '部材を置いたよ。節点（丸）をタップすると剛接合にかえられるよ。部材をタップすると、材料をかえたり、けしたりできるよ。'
     : '部材を置いたよ。置いた部材や節点をタップすると、材料をかえたり、けしたりできるよ。';
+}
+
+/** 置いた部材の両はしの節点を、ポンとふくらませる */
+function popNodesAt(points: Point[]): void {
+  const now = performance.now();
+  for (const node of design.nodes) {
+    if (points.some((p) => samePoint(p, node))) state.poppedAt.set(node.id, now);
+  }
+  requestAnimationFrame(animatePop);
+}
+
+function animatePop(now: number): void {
+  for (const [id, startedAt] of state.poppedAt) {
+    if (now - startedAt > NODE_POP_DURATION) state.poppedAt.delete(id);
+  }
+  draw();
+  if (state.poppedAt.size > 0) requestAnimationFrame(animatePop);
+}
+
+/** ふくらんでいる節点の、いまの大きさの倍率。はじめ大きく、すっともどる */
+function poppingNodes(): Map<string, number> {
+  const now = performance.now();
+  const scales = new Map<string, number>();
+  for (const [id, startedAt] of state.poppedAt) {
+    const left = Math.max(0, 1 - (now - startedAt) / NODE_POP_DURATION);
+    scales.set(id, 1 + (NODE_POP_SCALE - 1) * left * left);
+  }
+  return scales;
 }
 
 // ---------------------------------------------------------------- 置いた部材や節点を選んで直す
@@ -469,6 +517,7 @@ function deleteSelected(): void {
     design.removeMember(state.selectedMemberId);
     $('hint').textContent = '部材をけしたよ。';
   }
+  play('remove');
   clearSelection();
   refresh();
 }
@@ -484,6 +533,14 @@ function startTest(): void {
   playTest({ outcome, playback: new CrossingPlayback(outcome), stars, cost });
 }
 
+/** 車がわたる様子を最後まで見ずに、結果へ進む */
+function skipTest(): void {
+  const test = state.test;
+  if (!test || test.playback.finished) return;
+  if (test.playback.phase === 'driving' && test.outcome.status !== 'crossed') breakEffects();
+  test.playback.skipToEnd();
+}
+
 /** 同じ橋のまま、車がわたる様子をはじめから見直す */
 function replayTest(): void {
   if (!state.test) return;
@@ -495,10 +552,10 @@ function playTest(test: TestPlayback): void {
   state.test = test;
   $('run-test').textContent = '橋を直す';
   $('hint').textContent = '車が橋をわたっているよ。部材の色と矢印の変わり方を見てみよう。';
-  // 試験のあいだは予想できないので、同じ場所に「もう一度見る」を出す（わたり終わるまでは押せない）
+  // 試験のあいだは予想できないので、同じ場所に「とばす」を出す（わたり終わったら「もう一度見る」になる）
   $('predict').hidden = true;
   $('replay').hidden = false;
-  $<HTMLButtonElement>('replay').disabled = true;
+  $('replay').textContent = 'とばす';
   refresh();
   requestAnimationFrame((now) => playAnimation(test, now));
 }
@@ -514,9 +571,7 @@ function playAnimation(test: TestPlayback, previousTime: number): void {
     const wasDriving = test.playback.phase === 'driving';
     test.playback.advance(seconds);
     // 車が止まって橋がこわれ始めた瞬間に、画面をゆらす
-    if (wasDriving && test.playback.phase !== 'driving' && test.outcome.status !== 'crossed') {
-      shake($('canvas-wrap'));
-    }
+    if (wasDriving && test.playback.phase !== 'driving' && test.outcome.status !== 'crossed') breakEffects();
 
     if (test.playback.finished) {
       finishTest(test);
@@ -527,9 +582,16 @@ function playAnimation(test: TestPlayback, previousTime: number): void {
   });
 }
 
+/** こわれた瞬間の、ゆれと音 */
+function breakEffects(): void {
+  shake($('canvas-wrap'));
+  play('break');
+}
+
 function finishTest(test: TestPlayback): void {
+  const firstTime = test.newRecord === undefined;
   // 「もう一度見る」では、同じ試験をもう一度記録しない
-  if (!isSandbox(stage) && test.newRecord === undefined) {
+  if (!isSandbox(stage) && firstTime) {
     test.newRecord = progress.record(stage.id, countStars(test.stars), test.cost);
     if (predictedPerfectly(test)) progress.recordPerfectPrediction(stage.id);
   }
@@ -537,8 +599,10 @@ function finishTest(test: TestPlayback): void {
   if (test.outcome.status === 'crossed') {
     test.playback.showHardestMoment();
     showToast('いちばん苦しかった瞬間を表示しています');
+    stamp($('canvas-wrap'), countStars(test.stars) === 3 ? 'かんぺき！' : 'わたれた！');
+    play('cross');
   }
-  $<HTMLButtonElement>('replay').disabled = false;
+  $('replay').textContent = 'もう一度見る';
   $('hint').textContent = '部材をタップすると、押されているか引っぱられているかと、力の大きさがわかるよ。';
   refresh();
 }
@@ -610,16 +674,35 @@ function draw(): void {
     selectedNodeId: state.selectedNodeId ?? undefined,
     showSectionMarks: stage.sections.length > 1,
     guesses: state.guesses,
+    poppingNodes: poppingNodes(),
   };
   if (state.dragFrom && state.pointer && !samePoint(state.dragFrom, state.pointer)) {
     scene.preview = { from: state.dragFrom, to: state.pointer, valid: isShortEnough(state.dragFrom, state.pointer) };
   }
   drawScene(ctx, camera, scene);
+  updateDragGuide();
 
   if (state.finger && state.dragFrom && state.pointer) {
     const target = camera.toScreen(state.pointer.x, state.pointer.y);
     drawLoupe(ctx, target, state.finger, loupeLabel(state.dragFrom, state.pointer));
   }
+}
+
+/**
+ * まだ何も置いていないときは、左の支点から右へなぞるお手本の指を動かして見せる。
+ * 説明を読まなくても、置き方が目でわかるように。1 本置けば消える
+ */
+function updateDragGuide(): void {
+  const guide = $('drag-guide');
+  guide.hidden = design.members.length > 0 || state.test !== null || state.predicting || state.press !== null;
+  if (guide.hidden) return;
+
+  const anchor = stage.anchors[0];
+  const from = camera.toScreen(anchor.x, anchor.y);
+  const to = camera.toScreen(anchor.x + stage.gridSize * 2, anchor.y);
+  guide.style.left = `${from.x}px`;
+  guide.style.top = `${from.y}px`;
+  guide.style.setProperty('--length', `${to.x - from.x}px`);
 }
 
 function isShortEnough(from: Point, to: Point): boolean {

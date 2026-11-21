@@ -465,6 +465,110 @@ h2 {
   }
 }
 
+/* 試験の結果をポンと出す大きな札（ui/celebrate.ts が作る） */
+.stamp {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  padding: 10px 28px;
+  border: 4px solid #fff;
+  border-radius: 18px;
+  background: #d98a00;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+  color: #fff;
+  font-size: 40px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  animation: stamp-pop 1.4s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+}
+
+@keyframes stamp-pop {
+  0% { transform: translate(-50%, -50%) rotate(-4deg) scale(0.2); opacity: 0; }
+  18% { transform: translate(-50%, -50%) rotate(-4deg) scale(1); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(-4deg) scale(1.05); opacity: 0; }
+}
+
+/* なぞって置くお手本。指が押して、右へなぞって、はなす、をくり返す */
+.drag-guide {
+  position: absolute;
+  width: var(--length);
+  height: 0;
+  pointer-events: none;
+}
+
+.drag-guide-line {
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: var(--length);
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.55;
+  transform-origin: left center;
+  animation: guide-line 2.6s ease-in-out infinite;
+}
+
+.drag-guide-finger {
+  position: absolute;
+  left: -16px;
+  top: -16px;
+  width: 32px;
+  height: 32px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: rgba(14, 124, 102, 0.55);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  animation: guide-finger 2.6s ease-in-out infinite;
+}
+
+.drag-guide-text {
+  position: absolute;
+  left: 0;
+  bottom: 22px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@keyframes guide-finger {
+  0% { transform: translateX(0) scale(1.4); opacity: 0; }
+  12% { transform: translateX(0) scale(1.4); opacity: 1; }
+  22% { transform: translateX(0) scale(1); }
+  65% { transform: translateX(var(--length)) scale(1); opacity: 1; }
+  78% { transform: translateX(var(--length)) scale(1.4); opacity: 0; }
+  100% { transform: translateX(var(--length)) scale(1.4); opacity: 0; }
+}
+
+@keyframes guide-line {
+  0%, 22% { transform: scaleX(0); opacity: 0.55; }
+  65% { transform: scaleX(1); opacity: 0.55; }
+  85%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+/* 動きを減らす設定では、お手本は止まった絵にし、札はポンと出さずにそのまま見せる */
+@media (prefers-reduced-motion: reduce) {
+  .drag-guide-line,
+  .drag-guide-finger {
+    animation: none;
+  }
+
+  .drag-guide-finger {
+    transform: translateX(var(--length));
+  }
+
+  .stamp {
+    animation: none;
+  }
+}
+
 canvas {
   position: absolute;
   inset: 0;
@@ -1385,6 +1489,13 @@ canvas {
     bottom: 6px;
     padding: 2px 8px;
     font-size: 11px;
+  }
+
+  /* 結果の引き出しが右半分にかぶるので、札は見えている左側に小さめに出す */
+  .stamp {
+    left: 35%;
+    padding: 6px 18px;
+    font-size: 28px;
   }
 
   .result-stars {

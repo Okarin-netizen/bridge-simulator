@@ -75,6 +75,16 @@ export class CrossingPlayback {
     }
   }
 
+  /** 見るのをとばして、すぐに結果まで進める（車は落ち終わった所、こわれた部材はこわれ終わった形） */
+  skipToEnd(): void {
+    this.carX = this.endX;
+    if (this.outcome.status !== 'crossed') {
+      this.fallTime = FALL_DURATION;
+      this.fallDistance = 0.5 * GRAVITY * FALL_DURATION ** 2;
+    }
+    this.phase = 'finished';
+  }
+
   /**
    * 部材が落ちたきょり（m）。落ち終わったら元の位置にもどして、どの部材がこわれたかを見られるようにする
    */
