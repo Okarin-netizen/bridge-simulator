@@ -99,7 +99,9 @@ export class Progress {
 
 function load(key: string): Record<string, number> {
   try {
-    return JSON.parse(localStorage.getItem(key) ?? '{}');
+    const saved: unknown = JSON.parse(localStorage.getItem(key) ?? '{}');
+    // ほかの道具で書きかえられて形がこわれていても、はじめからやり直せるようにする
+    return typeof saved === 'object' && saved !== null ? (saved as Record<string, number>) : {};
   } catch {
     // 保存できない環境（プライベートブラウズなど）でも遊べるようにする
     return {};

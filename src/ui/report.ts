@@ -72,10 +72,12 @@ export function saveReportImage(bridgeCanvas: HTMLCanvasElement, content: Report
 function wrapText(text: string, charsPerLine: number): string[] {
   const lines: string[] = [];
   for (const paragraph of text.split('\n')) {
-    for (let i = 0; i < paragraph.length; i += charsPerLine) {
-      lines.push(paragraph.slice(i, i + charsPerLine));
+    // 絵文字などの 2 つ分の文字を途中で切らないよう、1 文字ずつの配列にしてから区切る
+    const chars = Array.from(paragraph);
+    for (let i = 0; i < chars.length; i += charsPerLine) {
+      lines.push(chars.slice(i, i + charsPerLine).join(''));
     }
-    if (paragraph.length === 0) lines.push('');
+    if (chars.length === 0) lines.push('');
   }
   return lines;
 }

@@ -14,7 +14,8 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  // 保存できるのは http(s) の GET だけ（ブラウザの拡張機能などの読みこみは、そのまま通す）
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
   event.respondWith(fetchAndSave(event.request));
 });
 
@@ -44,7 +45,8 @@ async function fetchAndSave(request) {
   try {
     const response = await fetch(request);
     if (response.ok || response.type === 'opaque') {
-      cache.put(request, response.clone());
+      // 容量がいっぱいなどで保存できなくても、ページはそのまま見せる
+      cache.put(request, response.clone()).catch(() => {});
     }
     return response;
   } catch (error) {
