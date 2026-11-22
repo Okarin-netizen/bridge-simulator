@@ -856,7 +856,8 @@ function updateMemberInfo(): void {
 function updateResult(): void {
   const box = $('result');
   const test = state.test;
-  const wasHidden = box.hidden;
+  // hidden は 'until-found' という値もとるので、真偽値にそろえておく
+  const wasHidden = Boolean(box.hidden);
   box.hidden = !test?.playback.finished;
   if (!test?.playback.finished) return;
 
