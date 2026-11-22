@@ -53,6 +53,9 @@ export interface Scene {
   };
 }
 
+/** 試験中・試験後に描くもの */
+export type TestScene = NonNullable<Scene['test']>;
+
 /** 吹き出しに書く、こわれ方 */
 const BREAK_LABELS: Record<FailureMode, string> = {
   buckling: '押されて横に曲がった（座屈）',

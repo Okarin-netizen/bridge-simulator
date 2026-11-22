@@ -1044,6 +1044,117 @@ canvas {
   font-weight: 700;
 }
 
+/* タイトル画面。うしろのキャンバスで、橋ができて車がわたるお手本が動く（ui/titleDemo.ts） */
+.title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  background: #dcebf5;
+}
+
+.title-screen[hidden] {
+  display: none;
+}
+
+.title-content {
+  position: relative;
+  margin-top: 6vh;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 白い字に、太い緑のふちどり。1 文字ずつ上から落ちてきて、ポンとはずむ */
+.title-logo {
+  margin: 0;
+  font-size: clamp(44px, 9vw, 96px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  color: #fff;
+  -webkit-text-stroke: 0.16em var(--accent);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.18));
+}
+
+.title-logo span {
+  display: inline-block;
+  animation: logo-drop 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.title-logo .lab {
+  -webkit-text-stroke-color: #d98a00;
+}
+
+.title-logo span:nth-child(2) { animation-delay: 0.06s; }
+.title-logo span:nth-child(3) { animation-delay: 0.12s; }
+.title-logo span:nth-child(4) { animation-delay: 0.18s; }
+.title-logo span:nth-child(5) { animation-delay: 0.3s; }
+.title-logo span:nth-child(6) { animation-delay: 0.36s; }
+
+@keyframes logo-drop {
+  0% { transform: translateY(-120%); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.title-catch {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 4px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+  font-size: clamp(15px, 2.2vw, 22px);
+  font-weight: 700;
+}
+
+/* 押したくなる、ぷっくりしたボタン。ゆっくり大きくなったり小さくなったりして、ここを押すとわかるように */
+.title-start {
+  position: absolute;
+  bottom: 9vh;
+  height: 72px;
+  padding: 0 56px;
+  border: 4px solid #fff;
+  border-radius: 999px;
+  box-shadow: 0 6px 0 #095646;
+  font-size: 28px;
+  letter-spacing: 0.1em;
+  animation: start-breathe 1.6s ease-in-out infinite;
+}
+
+.title-start:active {
+  box-shadow: 0 2px 0 #095646;
+  transform: translateY(4px);
+  animation: none;
+}
+
+@keyframes start-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.title-teacher {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-logo span,
+  .title-start {
+    animation: none;
+  }
+}
+
 /* ステージ選択 */
 .overlay {
   position: fixed;
@@ -1460,6 +1571,28 @@ canvas {
 
   .overlay {
     padding: 8px;
+  }
+
+  .title-content {
+    margin-top: 3vh;
+  }
+
+  .title-logo {
+    font-size: 52px;
+  }
+
+  .title-catch {
+    margin-top: 4px;
+    font-size: 14px;
+  }
+
+  /* 高さが足りず、まん中だと谷をわたる車にかかるので、あいている右の岸の上に置く */
+  .title-start {
+    right: 24px;
+    bottom: 22vh;
+    height: 56px;
+    padding: 0 40px;
+    font-size: 22px;
   }
 
   .overlay-box {

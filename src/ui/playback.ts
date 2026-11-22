@@ -1,7 +1,8 @@
 import { worstUtilization } from '../engine/analyze';
-import type { CrossingOutcome } from '../engine/crossing';
+import type { CrossingOutcome, Vehicle } from '../engine/crossing';
 import { GRAVITY } from '../engine/materials';
 import type { FailureMode, MemberResult } from '../engine/types';
+import type { TestScene } from './renderer';
 
 /** 画面の上で車が走る速さ（m/秒）。実際より遅くして、色の変化を目で追えるようにする */
 const DRIVE_SPEED = 8;
@@ -162,6 +163,32 @@ export class CrossingPlayback {
     const hardest = worstAt.indexOf(Math.max(...worstAt));
     this.carX = this.firstX + hardest * this.step;
     this.phase = 'finished';
+  }
+
+  /** いまの試験のようすを、画面に描く形にまとめる。予想がはずれた部材は、呼ぶ側で入れる */
+  scene(vehicle: Vehicle): TestScene {
+    const members = this.currentMembers;
+    const breaks = this.breakStates;
+    const crossed = this.outcome.status === 'crossed';
+    return {
+      results: new Map(members.map((m) => [m.id, m])),
+      // 部材は、こわれる順番がきたものから赤くする
+      brokenIds: new Set(breaks.map((state) => state.id)),
+      vehicle,
+      carPosition: this.carX,
+      unstableNodeId: this.finished ? this.outcome.unstableNodeId : undefined,
+      wrongGuessIds: new Set(),
+      displacements: this.drawnDisplacements(),
+      deflectionScale: this.deflectionScale,
+      fallDistance: this.fallDistance,
+      memberFallDistance: this.memberFallDistance,
+      wholeBridgeFalls: this.wholeBridgeFalls,
+      carFalls: this.carFalls,
+      breaks,
+      reactions: this.currentReactions,
+      showLoads: this.showsLoads,
+      carFaded: this.finished && crossed,
+    };
   }
 
   /** 画面に描くための、大きくしたたわみ（m）。前後の計算結果のあいだをなめらかにつなぐ */

@@ -124,6 +124,19 @@
       <p>スマホを<b>横向き</b>にして遊んでね</p>
     </div>
 
+    <!-- 開いたときに最初に出す画面。うしろで、橋ができて車がわたるお手本が動く -->
+    <div class="title-screen" id="title-screen">
+      <canvas id="title-canvas" aria-hidden="true"></canvas>
+      <div class="title-content">
+        <h1 class="title-logo" aria-label="かけはしラボ">
+          <span>か</span><span>け</span><span>は</span><span>し</span><span class="lab">ラ</span><span class="lab">ボ</span>
+        </h1>
+        <p class="title-catch">谷に橋をかけて、車をわたらせよう</p>
+      </div>
+      <button type="button" class="primary title-start" id="title-start">はじめる</button>
+      <a class="title-teacher" href="./teacher.html" target="_blank" rel="noopener">先生用ページ</a>
+    </div>
+
     <div class="overlay" id="stage-select" hidden>
       <div class="overlay-box">
         <div class="overlay-header">

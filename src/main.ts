@@ -2,7 +2,7 @@ import './style.css';
 import { simulateCrossing, VEHICLES } from './engine/crossing';
 import type { CrossingOutcome, Vehicle } from './engine/crossing';
 import { MATERIALS, SECTIONS } from './engine/materials';
-import type { MaterialId, MemberResult, Point, SectionId } from './engine/types';
+import type { MaterialId, Point, SectionId } from './engine/types';
 import { BridgeDesign } from './game/design';
 import { explainOutcome } from './game/explain';
 import { isPerfectPrediction, nextGuess, scorePredictions } from './game/prediction';
@@ -36,6 +36,7 @@ import {
   starText,
 } from './ui/resultPanel';
 import { memberCard, nodeCard } from './ui/selectCard';
+import { TitleDemo } from './ui/titleDemo';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
 const TAP_SLOP = { mouse: 6, touch: 12 };
@@ -120,6 +121,7 @@ const phoneLayout = window.matchMedia('(orientation: landscape) and (max-height:
 const app = document.querySelector<HTMLElement>('.app')!;
 const canvas = $<HTMLCanvasElement>('canvas');
 const ctx = canvas.getContext('2d')!;
+const titleDemo = new TitleDemo($<HTMLCanvasElement>('title-canvas'));
 
 // ---------------------------------------------------------------- 画面の準備
 
@@ -136,13 +138,17 @@ function setupControls(): void {
     draw();
   });
 
+  // 「はじめる」だけでなく、動いている橋のどこを押しても始められるようにする（先生用ページへのリンクはのぞく）
+  $('title-screen').addEventListener('click', (event) => {
+    if (!(event.target instanceof HTMLAnchorElement)) leaveTitle();
+  });
   $('open-stage-select').addEventListener('click', showStageSelect);
   $('load-sample').addEventListener('click', () => changeDesign(() => design.loadSample()));
   $('undo').addEventListener('click', undo);
   $('clear').addEventListener('click', () => changeDesign(() => design.clear()));
   document.addEventListener('keydown', (event) => {
     // ステージを選んだり振り返りを書いたりしているあいだは、うしろの橋を変えない
-    const choosingStage = !$('stage-select').hidden || state.reflecting;
+    const choosingStage = !$('title-screen').hidden || !$('stage-select').hidden || state.reflecting;
     // Caps Lock がかかっていると 'Z' になるので、小文字にそろえてから見る
     const isUndoKey = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z';
     if (isUndoKey && !isTyping(event) && !choosingStage) {
@@ -174,6 +180,14 @@ function setupControls(): void {
   for (const button of document.querySelectorAll('[data-close-drawer]')) {
     button.addEventListener('click', closeDrawer);
   }
+}
+
+/** タイトル画面から、ステージ選択へ進む */
+function leaveTitle(): void {
+  titleDemo.stop();
+  $('title-screen').hidden = true;
+  play('place');
+  showStageSelect();
 }
 
 function showSoundSetting(): void {
@@ -651,31 +665,8 @@ function currentTestView(): Scene['test'] {
   if (!test) return undefined;
 
   const { playback } = test;
-  const members = playback.currentMembers;
-  const results = new Map<string, MemberResult>(members.map((m) => [m.id, m]));
-  // 部材は、こわれる順番がきたものから赤くする
-  const breaks = playback.breakStates;
-  const brokenIds = new Set(breaks.map((state) => state.id));
-  const unstableNodeId = playback.finished ? test.outcome.unstableNodeId : undefined;
-  const wrongGuessIds = new Set(playback.finished ? scorePredictions(state.guesses, members).wrongIds : []);
-  return {
-    results,
-    brokenIds,
-    vehicle: state.vehicle,
-    carPosition: playback.carX,
-    unstableNodeId,
-    wrongGuessIds,
-    displacements: playback.drawnDisplacements(),
-    deflectionScale: playback.deflectionScale,
-    fallDistance: playback.fallDistance,
-    memberFallDistance: playback.memberFallDistance,
-    wholeBridgeFalls: playback.wholeBridgeFalls,
-    carFalls: playback.carFalls,
-    breaks,
-    reactions: playback.currentReactions,
-    showLoads: playback.showsLoads,
-    carFaded: playback.finished && test.outcome.status === 'crossed',
-  };
+  const wrongGuessIds = playback.finished ? scorePredictions(state.guesses, playback.currentMembers).wrongIds : [];
+  return { ...playback.scene(state.vehicle), wrongGuessIds: new Set(wrongGuessIds) };
 }
 
 // ---------------------------------------------------------------- 表示の更新
@@ -947,10 +938,11 @@ function saveReport(test: TestPlayback, resultTitle: string): void {
 
 setupControls();
 openStage(STAGES[0]);
-showStageSelect();
 // パネルの幅が変わったときも描き直せるよう、キャンバスの大きさの変化を見張る
 new ResizeObserver(resizeCanvas).observe(canvas);
+new ResizeObserver(() => titleDemo.resize()).observe($('title-canvas'));
 refresh();
+titleDemo.start();
 
 // 一度開けば、ネットが切れても使えるようにする（開発中はキャッシュがじゃまになるので公開版だけ）
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
