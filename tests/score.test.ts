@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isMasterBuild, Progress, SAFE_UTILIZATION, utilizationPercent } from '../src/game/score';
 
 describe('負担率の表示', () => {
@@ -39,6 +39,17 @@ describe('最安記録と名人ライン', () => {
     progress.recordPerfectPrediction('1-1');
     expect(progress.hasPerfectPrediction('1-1')).toBe(true);
     expect(progress.hasPerfectPrediction('1-2')).toBe(false);
+  });
+
+  describe('保存した記録がこわれていても遊べる', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('null が保存されていても、記録なしとして始める', () => {
+      vi.stubGlobal('localStorage', { getItem: () => 'null', setItem: () => {} });
+      const progress = new Progress();
+      expect(progress.starsFor('1-1')).toBe(0);
+      expect(progress.record('1-1', 3, 9_000)).toBe(true);
+    });
   });
 
   it('★3 を名人ライン以下の金額で取ったら名人', () => {

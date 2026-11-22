@@ -55,30 +55,48 @@ let design = new BridgeDesign(stage);
 const camera = new Camera();
 const progress = new Progress();
 
-const state = {
-  material: 'wood' as MaterialId,
-  section: 'square' as SectionId,
-  vehicle: VEHICLES[1] as Vehicle,
+interface EditorState {
+  material: MaterialId;
+  section: SectionId;
+  vehicle: Vehicle;
   /** 画面を押しているあいだの、押し始めた所。はなしたときに「タップ＝選ぶ」か「なぞる＝置く」かを決める */
-  press: null as Press | null,
-  dragFrom: null as Point | null,
-  pointer: null as Point | null,
+  press: Press | null;
+  dragFrom: Point | null;
+  pointer: Point | null;
   /** 指でなぞっているときの指先の位置（画面の px）。ルーペを出すのに使う */
-  finger: null as Point | null,
+  finger: Point | null;
   /** タップで選んだ部材。試験の結果では、力を見る部材にもなる */
-  selectedMemberId: null as string | null,
+  selectedMemberId: string | null;
   /** タップで選んだ節点 */
-  selectedNodeId: null as string | null,
-  test: null as TestPlayback | null,
+  selectedNodeId: string | null;
+  test: TestPlayback | null;
   /** 試験の前に、部材の力の向きを予想しているところか */
-  predicting: false,
-  guesses: new Map<string, Guess>(),
+  predicting: boolean;
+  guesses: Map<string, Guess>;
   /** 振り返りシートに書く気づき */
-  reflection: '',
+  reflection: string;
   /** 振り返りを書く画面を開いているか */
-  reflecting: false,
+  reflecting: boolean;
   /** 置いたばかりの節点と、置いた時刻（ポンとふくらませるのに使う） */
-  poppedAt: new Map<string, number>(),
+  poppedAt: Map<string, number>;
+}
+
+const state: EditorState = {
+  material: 'wood',
+  section: 'square',
+  vehicle: VEHICLES[1],
+  press: null,
+  dragFrom: null,
+  pointer: null,
+  finger: null,
+  selectedMemberId: null,
+  selectedNodeId: null,
+  test: null,
+  predicting: false,
+  guesses: new Map(),
+  reflection: '',
+  reflecting: false,
+  poppedAt: new Map(),
 };
 
 /** いまの場面。上のバーの 1〜4 と、右のパネルを出すかどうかがこれで決まる */
@@ -125,7 +143,9 @@ function setupControls(): void {
   document.addEventListener('keydown', (event) => {
     // ステージを選んだり振り返りを書いたりしているあいだは、うしろの橋を変えない
     const choosingStage = !$('stage-select').hidden || state.reflecting;
-    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !isTyping(event) && !choosingStage) {
+    // Caps Lock がかかっていると 'Z' になるので、小文字にそろえてから見る
+    const isUndoKey = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z';
+    if (isUndoKey && !isTyping(event) && !choosingStage) {
       event.preventDefault();
       undo();
     }
@@ -589,15 +609,18 @@ function breakEffects(): void {
 }
 
 function finishTest(test: TestPlayback): void {
+  const crossed = test.outcome.status === 'crossed';
+  // わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる。
+  // 力の予想も、この画面に出している瞬間の力で答え合わせするので、記録する前にもどしておく
+  if (crossed) test.playback.showHardestMoment();
+
   const firstTime = test.newRecord === undefined;
   // 「もう一度見る」では、同じ試験をもう一度記録しない
   if (!isSandbox(stage) && firstTime) {
     test.newRecord = progress.record(stage.id, countStars(test.stars), test.cost);
     if (predictedPerfectly(test)) progress.recordPerfectPrediction(stage.id);
   }
-  // わたり切ったあとは、負担率がいちばん大きかった瞬間にもどして色を見せる
-  if (test.outcome.status === 'crossed') {
-    test.playback.showHardestMoment();
+  if (crossed) {
     showToast('いちばん苦しかった瞬間を表示しています');
     stamp($('canvas-wrap'), countStars(test.stars) === 3 ? 'かんぺき！' : 'わたれた！');
     play('cross');
