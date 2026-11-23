@@ -9,6 +9,7 @@ import { isPerfectPrediction, nextGuess, scorePredictions } from './game/predict
 import type { Guess } from './game/prediction';
 import { countStars, isMasterBuild, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
+import { loadWork, saveWork } from './game/savedWork';
 import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
@@ -248,19 +249,24 @@ function startHint(): string {
 /** ステージを開いて、そのステージで使える材料や道具だけを並べる */
 function openStage(next: Stage): void {
   stage = next;
+  // 前にこのステージで組んでいた橋があれば、その続きから。下の refresh で上書きしないよう、先に読みこむ
   design = new BridgeDesign(stage);
+  const saved = loadWork(stage.id);
+  if (saved) design.restore(saved.bridge);
+  state.reflection = saved?.reflection ?? '';
   state.material = stage.materials[0];
   state.section = stage.sections[0];
   clearSelection();
   state.guesses.clear();
-  state.reflection = '';
   setPredicting(false);
   leaveTest();
 
   $('stage-chapter').textContent = stage.chapter;
   $('stage-name').textContent = stage.title;
   $('budget').textContent = yen(stage.budget);
-  $('hint').textContent = startHint();
+  $('hint').textContent = hasOwnMembers()
+    ? '前に組んだ橋の続きからだよ。はじめから作るときは「はじめから」を押してね。'
+    : startHint();
   $('goal-text').textContent = stage.goal;
   $('load-sample').hidden = !isSandbox(stage);
   $('legend-rigid').hidden = !stage.allowRigidJoints;
@@ -671,13 +677,24 @@ function currentTestView(): Scene['test'] {
 
 // ---------------------------------------------------------------- 表示の更新
 
+/** 橋が変わったときは必ずここを通るので、ここで端末に覚えておく */
 function refresh(): void {
+  rememberWork();
   showPhase();
   updateGoalStars();
   updateCost();
   updateInfoPanel();
   updateSelectCard();
   draw();
+}
+
+function rememberWork(): void {
+  saveWork(stage.id, { bridge: design.toBridge(), reflection: state.reflection });
+}
+
+/** ステージにはじめからある部材のほかに、自分で置いた部材があるか */
+function hasOwnMembers(): boolean {
+  return design.members.length > stage.presetMembers.length;
 }
 
 function draw(): void {
@@ -896,7 +913,10 @@ function openReflection(test: TestPlayback, resultTitle: string): void {
   $('reflect-form').replaceChildren(
     reflectionForm(
       state.reflection,
-      (text) => (state.reflection = text),
+      (text) => {
+        state.reflection = text;
+        rememberWork();
+      },
       () => saveReport(test, resultTitle),
     ),
   );

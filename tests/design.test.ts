@@ -134,3 +134,45 @@ describe('接合をかえる', () => {
     expect(design.nodes[0].joint).toBe('pin');
   });
 });
+
+describe('覚えておいた橋を組みなおす', () => {
+  const rigidStage = STAGES.find((s) => s.allowRigidJoints)!;
+
+  it('部材・材料・剛接合が同じ形にもどり、「もどす」の対象にはならない', () => {
+    const original = new BridgeDesign(rigidStage);
+    original.connect({ x: 0, y: 0 }, { x: 4, y: 0 }, 'steel', 'pipe');
+    original.connect({ x: 4, y: 0 }, { x: 4, y: 4 }, 'wood', 'hbeam');
+    const corner = original.findNodeAt(4, 0)!;
+    original.setJoint(corner.id, 'rigid');
+
+    const restored = new BridgeDesign(rigidStage);
+    restored.restore(JSON.parse(JSON.stringify(original.toBridge())));
+
+    expect(restored.totalCost()).toBe(original.totalCost());
+    expect(restored.members.map((m) => [m.material, m.section])).toEqual(
+      original.members.map((m) => [m.material, m.section]),
+    );
+    expect(restored.findNodeAt(4, 0)!.joint).toBe('rigid');
+    expect(restored.canUndo).toBe(false);
+  });
+
+  it('いまのステージで使えない材料や長すぎる部材はとばす', () => {
+    const design = new BridgeDesign(firstStage);
+    design.restore({
+      nodes: [
+        { id: 'anchor-left', x: 0, y: 0, joint: 'pin' },
+        { id: 'a', x: 4, y: 0, joint: 'pin' },
+        { id: 'b', x: 8, y: 0, joint: 'pin' },
+        { id: 'far', x: 30, y: 0, joint: 'pin' },
+      ],
+      members: [
+        { id: 'm1', a: 'anchor-left', b: 'a', material: 'wood', section: 'square' },
+        { id: 'm2', a: 'a', b: 'b', material: 'steel', section: 'square' },
+        { id: 'm3', a: 'a', b: 'far', material: 'wood', section: 'square' },
+        { id: 'm4', a: 'a', b: 'missing', material: 'wood', section: 'square' },
+      ],
+    });
+    expect(design.members).toHaveLength(1);
+    expect(design.nodes).toHaveLength(firstStage.anchors.length + 1);
+  });
+});
