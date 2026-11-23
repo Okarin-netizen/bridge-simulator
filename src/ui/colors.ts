@@ -15,12 +15,15 @@ export const COLORS = {
   muted: '#5B6675',
   accent: '#0E7C66',
   broken: '#9F1F0A',
+  /** たるんで力を伝えていないワイヤー */
+  slack: '#8A94A0',
 };
 
 export const MATERIAL_COLORS: Record<MaterialId, string> = {
   wood: '#B07A3E',
   steel: '#7E8A97',
   aluminum: '#A9B8C6',
+  wire: '#39424E',
 };
 
 // 負担率 0 → 1 で、うすい色からこい色へ変える

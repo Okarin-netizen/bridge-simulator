@@ -6,7 +6,7 @@ export interface Point {
   y: number;
 }
 
-export type MaterialId = 'wood' | 'steel' | 'aluminum';
+export type MaterialId = 'wood' | 'steel' | 'aluminum' | 'wire';
 export type SectionId = 'square' | 'pipe' | 'hbeam';
 
 /** 節点の接合方法。pin = 回る（モーメントを伝えない）、rigid = 固定（モーメントを伝える） */
@@ -57,6 +57,8 @@ export interface MemberResult {
   utilization: number;
   /** 負担率を決めている原因 */
   mode: FailureMode;
+  /** ワイヤーが押されてたるみ、力を伝えていないか */
+  slack?: boolean;
 }
 
 export interface AnalysisResult {

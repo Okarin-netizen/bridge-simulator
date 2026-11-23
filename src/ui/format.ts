@@ -1,4 +1,5 @@
-import { GRAVITY } from '../engine/materials';
+import { GRAVITY, isTensionOnly, MATERIALS, SECTIONS } from '../engine/materials';
+import type { MaterialId, SectionId } from '../engine/types';
 
 /** 画面に出す数の書き方をそろえる */
 
@@ -19,4 +20,10 @@ export function forceText(newtons: number): string {
   const kg = Math.abs(newtons) / GRAVITY;
   const weight = kg >= 1000 ? tons(kg) : `${kg >= 100 ? Math.round(kg / 10) * 10 : Math.round(kg)} kg`;
   return `${(Math.abs(newtons) / 1000).toFixed(1)} kN（およそ ${weight} の物の重さ）`;
+}
+
+/** 部材の呼び名。ふつうは「木材・角材」、ワイヤーは太さを選ばないので「ワイヤー」だけ */
+export function memberKind(member: { material: MaterialId; section: SectionId }): string {
+  const material = MATERIALS[member.material].name;
+  return isTensionOnly(member.material) ? material : `${material}・${SECTIONS[member.section].name}`;
 }

@@ -1,7 +1,7 @@
 import './style.css';
 import { simulateCrossing, VEHICLES } from './engine/crossing';
 import type { CrossingOutcome, Vehicle } from './engine/crossing';
-import { MATERIALS, SECTIONS } from './engine/materials';
+import { isTensionOnly } from './engine/materials';
 import type { MaterialId, Point, SectionId } from './engine/types';
 import { BridgeDesign } from './game/design';
 import { explainOutcome } from './game/explain';
@@ -15,7 +15,7 @@ import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
 import { materialButtons, sectionButtons, stageGroups, stageRecordHtml } from './ui/choices';
 import { $, choiceButton, showToast } from './ui/dom';
-import { tons, yen } from './ui/format';
+import { memberKind, tons, yen } from './ui/format';
 import { findMemberNear, findNodeNear, hitRadiusFor, samePoint } from './ui/hitTest';
 import type { HitRadius } from './ui/hitTest';
 import { drawLoupe } from './ui/loupe';
@@ -317,13 +317,21 @@ function renderChoiceButtons(): void {
       renderChoiceButtons();
     }),
   );
-  $('sections').replaceChildren(
-    ...sectionButtons(stage.sections, state.section, (id) => {
-      state.section = id;
-      renderChoiceButtons();
-    }),
-  );
-  $('tools-summary').textContent = `${MATERIALS[state.material].name}・${SECTIONS[state.section].name}`;
+  // ワイヤーは太さが決まっているので、断面のボタンのかわりに説明を出す
+  if (isTensionOnly(state.material)) {
+    const note = document.createElement('p');
+    note.className = 'wire-note';
+    note.textContent = 'ワイヤーは太さが決まっているよ（直径 2 cm）。引っぱられる所にだけ使おう。';
+    $('sections').replaceChildren(note);
+  } else {
+    $('sections').replaceChildren(
+      ...sectionButtons(stage.sections, state.section, (id) => {
+        state.section = id;
+        renderChoiceButtons();
+      }),
+    );
+  }
+  $('tools-summary').textContent = memberKind(state);
 }
 
 function resizeCanvas(): void {
@@ -567,7 +575,7 @@ function deleteSelected(): void {
 function startTest(): void {
   closeDrawer();
   setPredicting(false);
-  const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY });
+  const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY, span: stage.span });
   const cost = design.totalCost();
   const stars = rateAttempt(outcome, cost, stage.budget);
   playTest({ outcome, playback: new CrossingPlayback(outcome), stars, cost });
@@ -869,7 +877,8 @@ function updateResult(): void {
   box.hidden = !test?.playback.finished;
   if (!test?.playback.finished) return;
 
-  const explanation = explainOutcome(test.outcome, stage);
+  const usesWire = design.members.some((member) => isTensionOnly(member.material));
+  const explanation = explainOutcome(test.outcome, { allowRigidJoints: stage.allowRigidJoints, usesWire });
   const prediction = scorePredictions(state.guesses, test.playback.currentMembers);
   const stars = isSandbox(stage) ? null : test.stars;
   box.innerHTML = resultHeadHtml(explanation, stars);

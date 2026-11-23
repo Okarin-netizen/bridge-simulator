@@ -220,6 +220,22 @@ export const STAGES: Stage[] = [
     allowRigidJoints: true,
     lowAnchors: true,
   }),
+  defineStage({
+    id: '5-1',
+    chapter: '第5章　ワイヤーと車の列',
+    title: '5-1　ワイヤーで引っぱる',
+    goal: 'ワイヤーを使って、バスを予算の中でわたらせよう',
+    hint: 'ワイヤーは引っぱりにだけ強くて安い。道路の下に組んだ三角形で、いつも引っぱられる部材はどれかな？',
+    lesson:
+      'ワイヤーは引っぱる力にだけ強く、押されるとたるんで力を伝えない。いつも引っぱられる部材だけをワイヤーにすると、軽くて安い橋になる。つり橋や斜張橋（しゃちょうきょう）も、この性質を使っている。',
+    span: 16,
+    budget: 26_000,
+    masterCost: 25_400,
+    vehicleId: 'bus',
+    materials: ['wood', 'wire'],
+    sections: ['square', 'pipe'],
+    buildArea: { minX: 0, maxX: 16, minY: -6, maxY: 0 },
+  }),
 ];
 
 /** 制約なしで自由に試せる実験モード */
@@ -233,7 +249,7 @@ export const SANDBOX_STAGE: Stage = defineStage({
   budget: 200_000,
   vehicleId: null,
   maxMemberLength: 8.5,
-  materials: ['wood', 'steel', 'aluminum'],
+  materials: ['wood', 'steel', 'aluminum', 'wire'],
   sections: ['square', 'pipe', 'hbeam'],
   allowRigidJoints: true,
   lowAnchors: true,

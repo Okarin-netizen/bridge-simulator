@@ -1,4 +1,4 @@
-import { MATERIALS, SECTIONS } from '../engine/materials';
+import { MATERIALS, sectionOf } from '../engine/materials';
 import type { Bridge, BridgeMember, BridgeNode, JointType, MaterialId, Point, SectionId } from '../engine/types';
 import { buildPrattTruss } from './presets';
 import { RIGID_JOINT_PRICE } from './stage';
@@ -284,5 +284,5 @@ function positionAlong(p: Point, a: Point, b: Point): number | null {
 }
 
 export function memberCost(member: BridgeMember, length: number): number {
-  return Math.round(length * MATERIALS[member.material].pricePerMeter * SECTIONS[member.section].priceFactor);
+  return Math.round(length * MATERIALS[member.material].pricePerMeter * sectionOf(member).priceFactor);
 }

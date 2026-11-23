@@ -31,8 +31,14 @@ const FAILURE_TEXT: Record<FailureMode, Explanation> = {
   },
 };
 
+export interface ExplainOptions {
+  allowRigidJoints: boolean;
+  /** 橋にワイヤーを使っているか */
+  usesWire?: boolean;
+}
+
 /** 試験の結果を、生徒に見せる言葉にする */
-export function explainOutcome(outcome: CrossingOutcome, options: { allowRigidJoints: boolean }): Explanation {
+export function explainOutcome(outcome: CrossingOutcome, options: ExplainOptions): Explanation {
   const percent = utilizationPercent(outcome.maxUtilization);
 
   switch (outcome.status) {
@@ -56,13 +62,19 @@ export function explainOutcome(outcome: CrossingOutcome, options: { allowRigidJo
         hints: [
           '赤い丸の節点から岸やほかの節点へ部材をつなぎ、三角形を作る',
           ...(options.allowRigidJoints ? ['角の節点をタップして「剛接合（ごうせつごう）」にする（ラーメン構造）'] : []),
+          ...(options.usesWire
+            ? ['ワイヤーは押されるとたるんで、力を伝えない。押される部材は、ワイヤーではなく木などにする']
+            : []),
         ],
       };
     case 'gap':
       return {
         title: '道路がつながっていません',
         body: '車が走る道路（岸と同じ高さの横の部材）が、左の岸から右の岸までつながっていません。',
-        hints: ['岸と同じ高さで、左の岸から右の岸まで横の部材をつなげる'],
+        hints: [
+          '岸と同じ高さで、左の岸から右の岸まで横の部材をつなげる',
+          ...(options.usesWire ? ['ワイヤーの上は車が走れない。道路は木などの部材で作る'] : []),
+        ],
       };
     case 'collapsed':
       return FAILURE_TEXT[outcome.broken[0]?.mode ?? 'compression'];
