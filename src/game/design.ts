@@ -127,6 +127,29 @@ export class BridgeDesign {
     this.resetToStage();
   }
 
+  /**
+   * 端末に覚えておいた橋を、部材を 1 本ずつ置きなおして組みなおす。
+   * 置きなおすので、いまのステージで置けない部材（ステージの決まりが変わったときなど）は自然にとばされる。
+   * 組みなおした形は「もどす」の対象にしない。
+   */
+  restore(saved: Bridge): void {
+    this.nodes = this.stage.anchors.map((anchor) => ({ ...anchor }));
+    this.members = [];
+
+    const savedNodes = new Map(saved.nodes.map((node) => [node.id, node]));
+    for (const member of saved.members) {
+      const a = savedNodes.get(member.a);
+      const b = savedNodes.get(member.b);
+      if (!a || !b || !this.canUse(member.material, member.section)) continue;
+      this.connect(a, b, member.material, member.section);
+    }
+    for (const node of saved.nodes) {
+      const placed = node.joint === 'rigid' ? this.findNodeAt(node.x, node.y) : undefined;
+      if (placed) this.setJoint(placed.id, 'rigid');
+    }
+    this.history = [];
+  }
+
   /** お手本のプラット・トラスを置く */
   loadSample(): void {
     this.saveForUndo();
@@ -183,6 +206,10 @@ export class BridgeDesign {
       members: this.members.map((m) => ({ ...m })),
     });
     if (this.history.length > UNDO_LIMIT) this.history.shift();
+  }
+
+  private canUse(material: MaterialId, section: SectionId): boolean {
+    return this.stage.materials.includes(material) && this.stage.sections.includes(section);
   }
 
   private resetToStage(): void {
