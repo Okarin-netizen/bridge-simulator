@@ -107,6 +107,22 @@ td {
   padding: 4px 0;
 }
 
+.rubric {
+  width: 100%;
+}
+
+.rubric th,
+.rubric td {
+  padding: 8px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+  white-space: normal;
+}
+
+.rubric tr:first-child th {
+  background: var(--soft);
+}
+
 dt {
   font-weight: 700;
 }
