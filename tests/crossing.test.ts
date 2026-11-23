@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { simulateCrossing, VEHICLES } from '../src/engine/crossing';
+import { simulateCrossing, vehiclePitch, VEHICLES } from '../src/engine/crossing';
 import type { Vehicle } from '../src/engine/crossing';
 import { buildPrattTruss } from '../src/game/presets';
 
@@ -15,6 +15,16 @@ describe('車の走行試験', () => {
     expect(outcome.maxUtilization).toBeGreaterThan(0);
     expect(outcome.maxUtilization).toBeLessThan(1);
     expect(outcome.frames.length).toBeGreaterThan(30);
+  });
+
+  it('車が 3 台の列になると、1 台のときより部材の負担が大きく、最後の車がおりるまで計算する', () => {
+    const one = simulateCrossing(bridge, vehicle('car'), { roadY });
+    const three = simulateCrossing(bridge, vehicle('car'), { roadY, count: 3 });
+    expect(three.status).toBe('crossed');
+    expect(three.maxUtilization).toBeGreaterThan(one.maxUtilization);
+    const lastCarBehind = 2 * vehiclePitch(vehicle('car'));
+    const lastPosition = (frames: { position: number }[]) => frames[frames.length - 1].position;
+    expect(lastPosition(three.frames) - lastPosition(one.frames)).toBeCloseTo(lastCarBehind, 0);
   });
 
   it('重いトラックでは部材がこわれ、最初にこわれた部材と原因がわかる', () => {

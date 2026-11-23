@@ -52,7 +52,7 @@ h2 {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
   height: 72px;
   padding: 0 24px;
   background: var(--surface);
@@ -143,15 +143,19 @@ h2 {
 }
 
 .budget {
-  width: 280px;
+  /* 実験モードで車と台数の 2 つの箱が並ぶときは、少しせまくなる */
+  flex: 0 1 280px;
+  min-width: 220px;
 }
 
 .budget-label {
   display: flex;
   justify-content: space-between;
+  gap: 6px;
   margin-bottom: 6px;
   font-size: 13px;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .budget-label b {
@@ -246,6 +250,20 @@ h2 {
   min-height: 40px;
   font-size: 15px;
   color: var(--ink);
+}
+
+.vehicle-choices {
+  display: flex;
+  gap: 6px;
+}
+
+.vehicle-choices[hidden],
+.vehicle-fixed[hidden] {
+  display: none;
+}
+
+.vehicle-choices #vehicle-count {
+  padding: 0 6px;
 }
 
 .vehicle select {

@@ -28,7 +28,8 @@ function build(stage: Stage, segments: Segment[], material: MaterialId = 'wood',
 
 function test(design: BridgeDesign) {
   const vehicle = VEHICLES.find((v) => v.id === design.stage.vehicleId)!;
-  return simulateCrossing(design.toBridge(), vehicle, { roadY: design.stage.roadY, span: design.stage.span });
+  const { roadY, span, vehicleCount } = design.stage;
+  return simulateCrossing(design.toBridge(), vehicle, { roadY, span, count: vehicleCount });
 }
 
 /** ★3 の条件（わたり切る・予算内・負担率 70% 以下）をすべて満たすか */
@@ -214,6 +215,25 @@ describe('ステージには答えがある', () => {
     expect(test(build(stage, truss, 'wire')).status).toBe('gap');
 
     expectThreeStars(wireWhereStretched(stage));
+  });
+});
+
+describe('車の列', () => {
+  it('5-2：2-3 の答えの橋は、3 台の列だと余裕がなくなる。押される部材をパイプにするとわたれる', () => {
+    const stage = stageById('5-2');
+    const answerOf23 = build(stage, pratt(24, -4));
+    expect(test(answerOf23).status).toBe('crossed');
+    expect(test(answerOf23).maxUtilization).toBeGreaterThan(0.9);
+
+    // 道路の下のトラスで、道路と斜めの部材（押される部材）をパイプにする
+    const design = new BridgeDesign(stage);
+    for (const [[x1, y1], [x2, y2]] of pratt(24, -4)) {
+      const isRoad = y1 === 0 && y2 === 0;
+      const isDiagonal = x1 !== x2 && y1 !== y2;
+      const section: SectionId = isRoad || isDiagonal ? 'pipe' : 'square';
+      expect(design.connect({ x: x1, y: y1 }, { x: x2, y: y2 }, 'wood', section)).toBeNull();
+    }
+    expectThreeStars(design);
   });
 });
 

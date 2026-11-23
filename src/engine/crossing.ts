@@ -18,6 +18,21 @@ export const VEHICLES: Vehicle[] = [
   { id: 'truck', name: '大型トラック', mass: 20000, wheelbase: 6 },
 ];
 
+/** 車の列で、前の車のうしろと次の車の前のあいだ（m）。混んだ道のように、つめて走る */
+const CAR_GAP = 2;
+/** 車体が、前後の車輪の間かくより長い分（m） */
+export const BODY_OVERHANG = 1.2;
+
+/** 列になって走るとき、となりの車の中心どうしの間かく（m） */
+export function vehiclePitch(vehicle: Vehicle): number {
+  return vehicle.wheelbase + BODY_OVERHANG + CAR_GAP;
+}
+
+/** 列の i 台目（0 が先頭）の車の中心の位置 */
+export function carPositions(leadPosition: number, vehicle: Vehicle, count: number): number[] {
+  return Array.from({ length: count }, (_, i) => leadPosition - i * vehiclePitch(vehicle));
+}
+
 export interface BrokenMember {
   id: string;
   mode: FailureMode;
@@ -25,7 +40,7 @@ export interface BrokenMember {
 }
 
 export interface CrossingFrame {
-  /** 車の中心の x 座標（m） */
+  /** 先頭の車の中心の x 座標（m） */
   position: number;
   result: AnalysisResult;
 }
@@ -55,9 +70,14 @@ export interface CrossingOptions {
   span?: number;
   /** 何 m ごとに計算するか */
   step?: number;
+  /** 同じ車が何台、列になってわたるか（初期値 1） */
+  count?: number;
 }
 
-/** 車を左から右へ少しずつ進め、位置ごとに橋を計算する（準静的解析） */
+/**
+ * 車を左から右へ少しずつ進め、位置ごとに橋を計算する（準静的解析）。
+ * 車が何台かあるときは、先頭の車が橋に乗ってから、最後の車がおりるまで計算する
+ */
 export function simulateCrossing(bridge: Bridge, vehicle: Vehicle, options: CrossingOptions): CrossingOutcome {
   const step = options.step ?? 0.5;
   const road = findRoad(bridge, options.roadY, options.span);
@@ -67,9 +87,11 @@ export function simulateCrossing(bridge: Bridge, vehicle: Vehicle, options: Cros
     return { ...outcome, status: 'gap', stoppedAt: road.gapAt };
   }
 
+  const count = options.count ?? 1;
   const halfBase = vehicle.wheelbase / 2;
-  for (let position = road.start - halfBase; position <= road.end + halfBase + 1e-9; position += step) {
-    const loads = axleLoads(vehicle, position, road.segments);
+  const lastCarBehind = (count - 1) * vehiclePitch(vehicle);
+  for (let position = road.start - halfBase; position <= road.end + halfBase + lastCarBehind + 1e-9; position += step) {
+    const loads = carPositions(position, vehicle, count).flatMap((x) => axleLoads(vehicle, x, road.segments));
     const result = analyze(bridge, loads);
 
     if (!result.stable) {
