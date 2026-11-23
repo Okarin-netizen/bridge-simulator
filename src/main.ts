@@ -10,6 +10,15 @@ import type { Guess } from './game/prediction';
 import { countStars, isMasterBuild, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
 import { loadWork, saveWork } from './game/savedWork';
+import {
+  buildCustomStage,
+  CustomStageShelf,
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  settingsFromHash,
+  shareLink,
+} from './game/customStage';
+import type { CustomStageEntry, CustomStageSettings } from './game/customStage';
 import { introText, isSandbox, SANDBOX_STAGE, STAGES } from './game/stage';
 import type { Stage } from './game/stage';
 import { Camera } from './ui/camera';
@@ -37,6 +46,7 @@ import {
   starText,
 } from './ui/resultPanel';
 import { memberCard, nodeCard } from './ui/selectCard';
+import { customStageGroup, stageMakerForm } from './ui/stageMaker';
 import { TitleDemo } from './ui/titleDemo';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
@@ -58,6 +68,9 @@ let stage: Stage = STAGES[0];
 let design = new BridgeDesign(stage);
 const camera = new Camera();
 const progress = new Progress();
+const customStages = new CustomStageShelf();
+/** 配られたリンクから開いたときに、タイトル画面のあとすぐ遊ぶステージ */
+let linkedStage: Stage | null = null;
 
 interface EditorState {
   material: MaterialId;
@@ -162,7 +175,8 @@ function setupControls(): void {
   $('clear').addEventListener('click', () => changeDesign(() => design.clear()));
   document.addEventListener('keydown', (event) => {
     // ステージを選んだり振り返りを書いたりしているあいだは、うしろの橋を変えない
-    const choosingStage = !$('title-screen').hidden || !$('stage-select').hidden || state.reflecting;
+    const choosingStage =
+      !$('title-screen').hidden || !$('stage-select').hidden || !$('stage-maker').hidden || state.reflecting;
     // Caps Lock がかかっていると 'Z' になるので、小文字にそろえてから見る
     const isUndoKey = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z';
     if (isUndoKey && !isTyping(event) && !choosingStage) {
@@ -201,7 +215,12 @@ function leaveTitle(): void {
   titleDemo.stop();
   $('title-screen').hidden = true;
   play('place');
-  showStageSelect();
+  if (linkedStage) {
+    openStage(linkedStage);
+    linkedStage = null;
+  } else {
+    showStageSelect();
+  }
 }
 
 function showSoundSetting(): void {
@@ -313,22 +332,68 @@ function vehicleText(): string {
 function showStageSelect(): void {
   // まだ星を取っていない最初のステージに「つぎはここ」の印を付ける
   const nextStage = STAGES.find((s) => progress.starsFor(s.id) === 0);
+  const record = (s: Stage) =>
+    stageRecordHtml({
+      stars: starText(progress.starsFor(s.id)),
+      bestCost: progress.bestCostFor(s.id),
+      masterCost: s.masterCost,
+      perfectPrediction: progress.hasPerfectPrediction(s.id),
+    });
   const groups = stageGroups(
     [...STAGES, SANDBOX_STAGE],
-    (s) =>
-      isSandbox(s)
-        ? ''
-        : stageRecordHtml({
-            stars: starText(progress.starsFor(s.id)),
-            bestCost: progress.bestCostFor(s.id),
-            masterCost: s.masterCost,
-            perfectPrediction: progress.hasPerfectPrediction(s.id),
-          }),
+    (s) => (isSandbox(s) ? '' : record(s)),
     nextStage?.id,
     openStage,
   );
-  $('stage-list').replaceChildren(...groups);
+  const custom = customStageGroup(
+    customStages.entries.map((entry) => {
+      const stage = buildCustomStage(entry);
+      return { entry, stage, record: record(stage) };
+    }),
+    { open: openStage, edit: openStageMaker, create: () => openStageMaker() },
+  );
+  $('stage-list').replaceChildren(...groups, custom);
   $('stage-select').hidden = false;
+}
+
+// ---------------------------------------------------------------- ステージ作成
+
+/** ステージを作る（entry を渡したときは、そのステージを直す）入力欄を開く */
+function openStageMaker(entry?: CustomStageEntry): void {
+  const closeMaker = () => ($('stage-maker').hidden = true);
+  const save = (input: CustomStageSettings) => {
+    // 予算のはんぱな数や長すぎる名前は、ここで遊べる値にそろえる
+    const settings = normalizeSettings(input);
+    if (!settings) return;
+    const saved = entry ? customStages.update(entry.id, settings) : customStages.add(settings);
+    closeMaker();
+    if (saved) openStage(buildCustomStage(saved));
+  };
+  const remove = () => {
+    if (!entry) return;
+    customStages.remove(entry.id);
+    closeMaker();
+    showStageSelect();
+  };
+
+  $('stage-maker-title').textContent = entry ? 'ステージを直す・配る' : 'ステージをつくる';
+  $('stage-maker-form').replaceChildren(
+    stageMakerForm(
+      entry?.settings ?? DEFAULT_SETTINGS,
+      { link: entry ? shareLink(entry.settings, location.href) : undefined },
+      { save, cancel: closeMaker, remove: entry ? remove : undefined },
+    ),
+  );
+  $('stage-maker').hidden = false;
+}
+
+/** 配られたリンク（# のうしろにステージの条件が入っている）から開いたら、そのステージを入れておく */
+function receiveLinkedStage(): void {
+  const settings = settingsFromHash(location.hash);
+  if (!settings) return;
+  linkedStage = buildCustomStage(customStages.add(settings));
+  // 開きなおしたときに、また同じステージから始まらないよう、URL の # は消しておく
+  history.replaceState(null, '', location.pathname + location.search);
 }
 
 function renderChoiceButtons(): void {
@@ -912,7 +977,9 @@ function updateResult(): void {
   }
 
   // 次に押すボタンは、スクロールしなくても見える所に置く
-  const nextStage = STAGES[STAGES.indexOf(stage) + 1];
+  // 実験モードや作ったステージには、決まった「次」はない
+  const index = STAGES.indexOf(stage);
+  const nextStage = index >= 0 ? STAGES[index + 1] : undefined;
   if (test.outcome.status === 'crossed' && nextStage) {
     box.append(choiceButton('次のステージへ', false, () => openStage(nextStage), 'primary small'));
   }
@@ -991,6 +1058,7 @@ function saveReport(test: TestPlayback, resultTitle: string): void {
 }
 
 setupControls();
+receiveLinkedStage();
 openStage(STAGES[0]);
 // パネルの幅が変わったときも描き直せるよう、キャンバスの大きさの変化を見張る
 new ResizeObserver(resizeCanvas).observe(canvas);

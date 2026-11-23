@@ -1241,7 +1241,8 @@ canvas {
 }
 
 .chapter {
-  flex: var(--count) 1 calc(var(--count) * var(--card-width));
+  /* カードの幅はどの章もそろえる。行のあまりは右に空ける（章ごとにカードの大きさが変わると見くらべにくい） */
+  flex: 0 1 calc(var(--count) * var(--card-width) + (var(--count) - 1) * 12px);
   min-width: 0;
 }
 
@@ -1335,6 +1336,131 @@ canvas {
 
 .badge.prediction {
   background: #3b6fd8;
+}
+
+/* みんなのステージ：作ったステージのカードの下に「直す・配る」を付ける */
+.custom-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.custom-card .stage-card {
+  flex-grow: 1;
+}
+
+.custom-edit {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.make-card {
+  justify-content: center;
+  border-style: dashed;
+  background: var(--soft);
+}
+
+.make-plus {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+}
+
+/* ステージをつくる画面 */
+.maker-box {
+  width: min(640px, 100%);
+}
+
+.maker-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.maker-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.maker-field input[type='text'],
+.maker-field input[type='number'],
+.maker-field select,
+.maker-share input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+.maker-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.maker-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.maker-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.maker-checks input {
+  width: 20px;
+  height: 20px;
+}
+
+.maker-problem {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.maker-share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.maker-share p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.maker-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.maker-buttons .danger {
+  margin-right: auto;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* ふりかえりを書く画面 */
@@ -1463,7 +1589,7 @@ canvas {
   .stage-title,
   .steps,
   .spacer,
-  .vehicle > span {
+  .vehicle > span:first-child {
     display: none;
   }
 
@@ -1491,6 +1617,12 @@ canvas {
 
   .meter {
     height: 6px;
+  }
+
+  /* 列がせまいので、車と台数の箱はたてに並べる */
+  .vehicle-choices {
+    flex-direction: column;
+    gap: 4px;
   }
 
   .vehicle select {
@@ -1677,6 +1809,8 @@ canvas {
   .vehicle-fixed {
     min-height: 0;
     font-size: 12px;
+    /* 「乗用車 1.2 t × 3 台」は列の幅に入らないので、折り返す */
+    white-space: normal;
   }
 }
 

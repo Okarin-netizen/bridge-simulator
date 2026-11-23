@@ -58,6 +58,8 @@ export interface CrossingOutcome {
   stoppedAt: number | null;
   /** 形がくずれたとき、くずれ始めた節点 */
   unstableNodeId?: string;
+  /** 形がくずれたとき、たるんでいたワイヤー */
+  slackWireIds?: string[];
 }
 
 export interface CrossingOptions {
@@ -95,7 +97,13 @@ export function simulateCrossing(bridge: Bridge, vehicle: Vehicle, options: Cros
     const result = analyze(bridge, loads);
 
     if (!result.stable) {
-      return { ...outcome, status: 'unstable', stoppedAt: position, unstableNodeId: result.unstableNodeId };
+      return {
+        ...outcome,
+        status: 'unstable',
+        stoppedAt: position,
+        unstableNodeId: result.unstableNodeId,
+        slackWireIds: result.slackWireIds,
+      };
     }
 
     outcome.frames.push({ position, result });

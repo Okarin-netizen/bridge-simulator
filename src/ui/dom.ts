@@ -17,6 +17,16 @@ export function choiceButton(
   return button;
 }
 
+/** 生徒や先生が入力した文字を、HTML の中にそのまま出せるようにする */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let toastTimer = 0;
 
 /** 画面の下に、しばらくだけ短いお知らせを出す */

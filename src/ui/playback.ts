@@ -178,6 +178,7 @@ export class CrossingPlayback {
       carCount,
       carPosition: this.carX,
       unstableNodeId: this.finished ? this.outcome.unstableNodeId : undefined,
+      slackWireIds: new Set(this.finished ? this.outcome.slackWireIds : []),
       wrongGuessIds: new Set(),
       displacements: this.drawnDisplacements(),
       deflectionScale: this.deflectionScale,

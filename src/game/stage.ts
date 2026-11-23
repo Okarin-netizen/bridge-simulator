@@ -70,7 +70,7 @@ function anchorsFor(span: number, withLowAnchors: boolean): BridgeNode[] {
 }
 
 /** ステージの共通部分を埋めて作る */
-function defineStage(
+export function defineStage(
   stage: Pick<Stage, 'id' | 'chapter' | 'title' | 'goal' | 'hint' | 'span' | 'budget' | 'vehicleId'> &
     Partial<Stage> & { lowAnchors?: boolean },
 ): Stage {
