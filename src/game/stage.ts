@@ -43,6 +43,8 @@ export interface Stage {
   comparison?: { label: string; cost: number };
   /** わたる車の id。null なら生徒が選べる（実験モード） */
   vehicleId: string | null;
+  /** 同じ車が何台、列になってわたるか。実験モードでは生徒が選べる */
+  vehicleCount: number;
   materials: MaterialId[];
   sections: SectionId[];
   allowRigidJoints: boolean;
@@ -80,6 +82,7 @@ function defineStage(
     buildArea: { minX: 0, maxX: stage.span, minY: lowAnchors ? -8 : -6, maxY: 8 },
     gridSize: 2,
     maxMemberLength: 6,
+    vehicleCount: 1,
     materials: ['wood'],
     sections: ['square'],
     allowRigidJoints: false,
@@ -235,6 +238,21 @@ export const STAGES: Stage[] = [
     materials: ['wood', 'wire'],
     sections: ['square', 'pipe'],
     buildArea: { minX: 0, maxX: 16, minY: -6, maxY: 0 },
+  }),
+  defineStage({
+    id: '5-2',
+    chapter: '第5章　ワイヤーと車の列',
+    title: '5-2　車の列がわたる橋',
+    goal: '乗用車 3 台の列を、予算の中でわたらせよう',
+    hint: '2-3 と同じ 24 m の谷。1 台ならわたれた橋も、3 台つづけて乗ると……？ 試験で色がこくなる部材を強くしよう。',
+    lesson:
+      '車が何台も乗ると、重さが足し算になって、部材にかかる力も大きくなる。橋は、いちばん重くなるとき（車が列になって乗ったとき）にもたえられるように作る。',
+    span: 24,
+    budget: 48_000,
+    masterCost: 44_600,
+    vehicleId: 'car',
+    vehicleCount: 3,
+    sections: ['square', 'pipe'],
   }),
 ];
 

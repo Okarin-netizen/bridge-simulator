@@ -39,7 +39,7 @@ export interface BreakState {
  */
 export class CrossingPlayback {
   phase: PlaybackPhase = 'driving';
-  /** 車の中心の x 座標（m） */
+  /** 先頭の車の中心の x 座標（m） */
   carX: number;
   /** こわれて落ちたきょり（m） */
   fallDistance = 0;
@@ -166,7 +166,7 @@ export class CrossingPlayback {
   }
 
   /** いまの試験のようすを、画面に描く形にまとめる。予想がはずれた部材は、呼ぶ側で入れる */
-  scene(vehicle: Vehicle): TestScene {
+  scene(vehicle: Vehicle, carCount = 1): TestScene {
     const members = this.currentMembers;
     const breaks = this.breakStates;
     const crossed = this.outcome.status === 'crossed';
@@ -175,6 +175,7 @@ export class CrossingPlayback {
       // 部材は、こわれる順番がきたものから赤くする
       brokenIds: new Set(breaks.map((state) => state.id)),
       vehicle,
+      carCount,
       carPosition: this.carX,
       unstableNodeId: this.finished ? this.outcome.unstableNodeId : undefined,
       wrongGuessIds: new Set(),

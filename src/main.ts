@@ -41,6 +41,8 @@ import { TitleDemo } from './ui/titleDemo';
 
 /** これより動かさずにはなしたら「タップ」とみなす（画面の px）。指はぶれるので広めにする */
 const TAP_SLOP = { mouse: 6, touch: 12 };
+/** 実験モードで選べる、列になってわたる車の台数の上限 */
+const MAX_VEHICLE_COUNT = 3;
 /** 置いたばかりの節点がポンとふくらんで、もとの大きさにもどるまでの時間（ミリ秒）と、最初の大きさ */
 const NODE_POP_DURATION = 220;
 const NODE_POP_SCALE = 1.9;
@@ -61,6 +63,8 @@ interface EditorState {
   material: MaterialId;
   section: SectionId;
   vehicle: Vehicle;
+  /** 同じ車が何台、列になってわたるか */
+  vehicleCount: number;
   /** 画面を押しているあいだの、押し始めた所。はなしたときに「タップ＝選ぶ」か「なぞる＝置く」かを決める */
   press: Press | null;
   dragFrom: Point | null;
@@ -87,6 +91,7 @@ const state: EditorState = {
   material: 'wood',
   section: 'square',
   vehicle: VEHICLES[1],
+  vehicleCount: 1,
   press: null,
   dragFrom: null,
   pointer: null,
@@ -136,6 +141,14 @@ function setupControls(): void {
     // 試験の途中で車を変えると、走っている車と力の結果が合わなくなるので、試験をやめる
     leaveTest();
     state.vehicle = VEHICLES.find((v) => v.id === vehicleSelect.value)!;
+    draw();
+  });
+
+  const countSelect = $<HTMLSelectElement>('vehicle-count');
+  for (let count = 1; count <= MAX_VEHICLE_COUNT; count++) countSelect.add(new Option(`${count}台`, String(count)));
+  countSelect.addEventListener('change', () => {
+    leaveTest();
+    state.vehicleCount = Number(countSelect.value);
     draw();
   });
 
@@ -277,16 +290,24 @@ function openStage(next: Stage): void {
   const vehicleIsFixed = stage.vehicleId !== null;
   if (vehicleIsFixed) {
     state.vehicle = VEHICLES.find((v) => v.id === stage.vehicleId)!;
+    state.vehicleCount = stage.vehicleCount;
     vehicleSelect.value = state.vehicle.id;
-    $('vehicle-fixed').textContent = `${state.vehicle.name} ${tons(state.vehicle.mass)}`;
+    $('vehicle-fixed').textContent = vehicleText();
   }
-  vehicleSelect.hidden = vehicleIsFixed;
+  $<HTMLSelectElement>('vehicle-count').value = String(state.vehicleCount);
+  $('vehicle-choices').hidden = vehicleIsFixed;
   $('vehicle-fixed').hidden = !vehicleIsFixed;
 
   $('stage-select').hidden = true;
   closeDrawer();
   renderChoiceButtons();
   resizeCanvas();
+}
+
+/** わたる車を「乗用車 1.2 t」、列なら「乗用車 1.2 t × 3 台」と書く */
+function vehicleText(): string {
+  const vehicle = `${state.vehicle.name} ${tons(state.vehicle.mass)}`;
+  return state.vehicleCount > 1 ? `${vehicle} × ${state.vehicleCount} 台` : vehicle;
 }
 
 function showStageSelect(): void {
@@ -575,7 +596,11 @@ function deleteSelected(): void {
 function startTest(): void {
   closeDrawer();
   setPredicting(false);
-  const outcome = simulateCrossing(design.toBridge(), state.vehicle, { roadY: stage.roadY, span: stage.span });
+  const outcome = simulateCrossing(design.toBridge(), state.vehicle, {
+    roadY: stage.roadY,
+    span: stage.span,
+    count: state.vehicleCount,
+  });
   const cost = design.totalCost();
   const stars = rateAttempt(outcome, cost, stage.budget);
   playTest({ outcome, playback: new CrossingPlayback(outcome), stars, cost });
@@ -680,7 +705,7 @@ function currentTestView(): Scene['test'] {
 
   const { playback } = test;
   const wrongGuessIds = playback.finished ? scorePredictions(state.guesses, playback.currentMembers).wrongIds : [];
-  return { ...playback.scene(state.vehicle), wrongGuessIds: new Set(wrongGuessIds) };
+  return { ...playback.scene(state.vehicle, state.vehicleCount), wrongGuessIds: new Set(wrongGuessIds) };
 }
 
 // ---------------------------------------------------------------- 表示の更新
@@ -943,7 +968,7 @@ function closeReflection(): void {
 function reportLines(test: TestPlayback): string[] {
   const score = scorePredictions(state.guesses, test.playback.currentMembers);
   return [
-    `わたる車：${state.vehicle.name}（${tons(state.vehicle.mass)}）`,
+    `わたる車：${vehicleText()}`,
     `使った金額：${yen(test.cost)}（予算 ${yen(stage.budget)}）`,
     `いちばん苦しい部材の負担率：${utilizationPercent(test.outcome.maxUtilization)}%`,
     ...(isSandbox(stage) ? [] : [`星：${starText(countStars(test.stars))}`]),

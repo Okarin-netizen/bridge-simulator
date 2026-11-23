@@ -11,7 +11,7 @@ function stageCard(stage: Stage): HTMLElement {
   const vehicle = VEHICLES.find((v) => v.id === stage.vehicleId);
   const conditions = [
     `谷の幅 ${stage.span} m`,
-    vehicle ? `${vehicle.name}（${tons(vehicle.mass)}）` : '車は自由',
+    vehicle ? `${vehicle.name}（${tons(vehicle.mass)}）${stage.vehicleCount > 1 ? ` × ${stage.vehicleCount} 台` : ''}` : '車は自由',
     `予算 ${yen(stage.budget)}`,
     ...(stage.masterCost === undefined ? [] : [`名人ライン ${yen(stage.masterCost)}`]),
     `材料：${stage.materials.map((id) => MATERIALS[id].name).join('・')}`,

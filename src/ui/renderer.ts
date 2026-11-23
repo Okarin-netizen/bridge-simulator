@@ -1,3 +1,4 @@
+import { carPositions, BODY_OVERHANG } from '../engine/crossing';
 import type { Vehicle } from '../engine/crossing';
 import { GRAVITY, isTensionOnly } from '../engine/materials';
 import type { BridgeMember, BridgeNode, FailureMode, MemberResult, Point, SectionId } from '../engine/types';
@@ -25,6 +26,9 @@ export interface Scene {
     results: Map<string, MemberResult>;
     brokenIds: Set<string>;
     vehicle: Vehicle;
+    /** 同じ車が何台、列になって走っているか */
+    carCount: number;
+    /** 先頭の車の中心の x 座標（m） */
     carPosition: number;
     /** 形がくずれた節点（赤い丸で示す） */
     unstableNodeId?: string;
@@ -104,7 +108,9 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
   const selectedNode = scene.design.nodes.find((n) => n.id === scene.selectedNodeId);
   if (selectedNode) drawRing(ctx, camera.toScreen(selectedNode.x, selectedNode.y), COLORS.accent);
   if (scene.test) {
-    drawCar(ctx, camera, scene);
+    for (const position of carPositions(scene.test.carPosition, scene.test.vehicle, scene.test.carCount)) {
+      drawCar(ctx, camera, scene, position);
+    }
     drawDeflectionNote(ctx, scene.test.deflectionScale, height);
     drawBreakLabel(ctx, camera, scene, width);
   }
@@ -400,7 +406,10 @@ function drawLoadsAndReactions(ctx: CanvasRenderingContext2D, camera: Camera, sc
   // 軽自動車からトラックまで、矢印の長さで重さのちがいがわかるようにする
   const weightLength = 18 + 10 * Math.sqrt(test.vehicle.mass / 1000);
 
-  const axles = [test.carPosition - test.vehicle.wheelbase / 2, test.carPosition + test.vehicle.wheelbase / 2];
+  const axles = carPositions(test.carPosition, test.vehicle, test.carCount).flatMap((x) => [
+    x - test.vehicle.wheelbase / 2,
+    x + test.vehicle.wheelbase / 2,
+  ]);
   const onBridge = axles.filter((x) => x > 0 && x < span);
   onBridge.forEach((x, i) => {
     const deck = deckShapeAt(scene, x);
@@ -599,15 +608,17 @@ function drawRing(ctx: CanvasRenderingContext2D, p: Point, color: string, radius
 }
 
 /**
- * 車を描く。橋のたわみに合わせて上下・前後に傾き、こわれたときは谷へ落ちていく。
+ * 車を 1 台描く。橋のたわみに合わせて上下・前後に傾き、こわれたときは谷へ落ちていく。
  * タイヤは走ったきょりに合わせて回す。
  */
-function drawCar(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
+function drawCar(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene, position: number): void {
   const test = scene.test!;
-  const { vehicle, carPosition: position } = test;
-  const fallDistance = test.carFalls ? test.fallDistance : 0;
+  const { vehicle } = test;
+  // 落ちるのは橋の上にいた車だけ。うしろの岸にいる車は、その場で止まる
+  const onBridge = position > 0 && position < scene.design.stage.span;
+  const fallDistance = test.carFalls && onBridge ? test.fallDistance : 0;
   const roadY = scene.design.stage.roadY;
-  const length = vehicle.wheelbase + 1.2;
+  const length = vehicle.wheelbase + BODY_OVERHANG;
   const height = vehicle.mass > 5000 ? 3 : 1.5;
   const wheelRadius = 0.4;
 
