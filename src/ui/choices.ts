@@ -2,7 +2,7 @@ import { CABLE_SECTION, isTensionOnly, MATERIALS, SECTIONS } from '../engine/mat
 import type { MaterialId, SectionId } from '../engine/types';
 import type { Stage } from '../game/stage';
 import { COLORS, MATERIAL_COLORS } from './colors';
-import { choiceButton } from './dom';
+import { choiceButton, escapeHtml } from './dom';
 import { yen } from './format';
 import { SECTION_ICONS } from './sectionIcons';
 
@@ -114,23 +114,25 @@ export function stageGroups(
   });
 }
 
-function stageCard(stage: Stage, record: string, isNext: boolean, onOpen: () => void): HTMLButtonElement {
+/** ステージのカード。名前は「ステージ作成」で入力されたものもあるので、文字として出す */
+export function stageCard(stage: Stage, record: string, isNext: boolean, onOpen: () => void): HTMLButtonElement {
   return choiceButton(
     (isNext ? '<span class="card-next">つぎはここ</span>' : '') +
       stageThumbnail(stage) +
-      `<span class="card-title">${stage.title}</span>` +
-      `<span class="card-goal">${stage.goal}</span><span class="card-stars">${record}</span>`,
+      `<span class="card-title">${escapeHtml(stage.title)}</span>` +
+      `<span class="card-goal">${escapeHtml(stage.goal)}</span><span class="card-stars">${record}</span>`,
     false,
     onOpen,
     isNext ? 'stage-card next' : 'stage-card',
   );
 }
 
-/** 谷の広さと、はじめから置いてある部材がわかる小さな絵。どのステージも同じ縮尺で描く */
+/** 谷の広さと、はじめから置いてある部材がわかる小さな絵。広すぎる谷のほかは、同じ縮尺で描く */
 function stageThumbnail(stage: Stage): string {
   const width = 120;
   const height = 48;
-  const scale = 4; // 1 m を何 px で描くか
+  // 1 m を何 px で描くか。作ったステージの広い谷（28 m 以上）は、はみ出さないよう縮める
+  const scale = Math.min(4, 104 / stage.span);
   const roadY = 22;
   const left = (width - stage.span * scale) / 2;
   const at = (x: number, y: number) => `${left + x * scale} ${roadY - y * scale}`;
