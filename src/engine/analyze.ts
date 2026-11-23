@@ -60,7 +60,7 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
   for (let attempt = 0; attempt < attempts; attempt++) {
     const active = geometries.filter((g) => !slackIds.has(g.member.id));
     const solved = solveFrame(nodes, nodeIndex, active, f);
-    if (!solved.stable) return unstableResult(solved.unstableNodeId);
+    if (!solved.stable) return unstableResult(solved.unstableNodeId, slackIds);
 
     const nextSlackIds = nextSlackWires(geometries, slackIds, solved.u, nodeIndex);
     if (sameIds(nextSlackIds, slackIds)) {
@@ -196,8 +196,15 @@ function sameIds(a: Set<string>, b: Set<string>): boolean {
   return a.size === b.size && [...a].every((id) => b.has(id));
 }
 
-function unstableResult(unstableNodeId: string | undefined): AnalysisResult {
-  return { stable: false, unstableNodeId, members: [], displacements: new Map(), reactions: new Map() };
+function unstableResult(unstableNodeId: string | undefined, slackIds = new Set<string>()): AnalysisResult {
+  return {
+    stable: false,
+    unstableNodeId,
+    slackWireIds: [...slackIds],
+    members: [],
+    displacements: new Map(),
+    reactions: new Map(),
+  };
 }
 
 function slackResult(geometry: MemberGeometry): MemberResult {

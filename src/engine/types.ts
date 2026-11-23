@@ -66,6 +66,8 @@ export interface AnalysisResult {
   stable: boolean;
   /** 形がくずれるとき、くずれ始める節点 */
   unstableNodeId?: string;
+  /** 形がくずれたとき、押されてたるんでいたワイヤー（たるんだせいで形が保てなくなった） */
+  slackWireIds?: string[];
   members: MemberResult[];
   /** 節点の変位（m）と回転（rad） */
   displacements: Map<string, { dx: number; dy: number; rot: number }>;

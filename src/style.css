@@ -1589,7 +1589,7 @@ canvas {
   .stage-title,
   .steps,
   .spacer,
-  .vehicle > span {
+  .vehicle > span:first-child {
     display: none;
   }
 
@@ -1617,6 +1617,12 @@ canvas {
 
   .meter {
     height: 6px;
+  }
+
+  /* 列がせまいので、車と台数の箱はたてに並べる */
+  .vehicle-choices {
+    flex-direction: column;
+    gap: 4px;
   }
 
   .vehicle select {
@@ -1803,6 +1809,8 @@ canvas {
   .vehicle-fixed {
     min-height: 0;
     font-size: 12px;
+    /* 「乗用車 1.2 t × 3 台」は列の幅に入らないので、折り返す */
+    white-space: normal;
   }
 }
 

@@ -54,6 +54,18 @@ export function explainOutcome(outcome: CrossingOutcome, options: ExplainOptions
             : ['余裕があります。部材をへらして、もっと安くできるかな？'],
       };
     case 'unstable':
+      if (outcome.slackWireIds?.length) {
+        return {
+          title: 'ワイヤーがたるんで、橋の形がくずれてしまった',
+          body:
+            '灰色に垂れているワイヤーは、押される向きになって、たるんでいます。' +
+            'ワイヤーは引っぱる力しか伝えられないので、たるむと、その部材がないのと同じになり、形を保てません。',
+          hints: [
+            'たるんだワイヤーを、木などの押されても平気な部材にかえる',
+            'ワイヤーは、車がどこにいても引っぱられる部材（道路の下に組んだときの、いちばん下の横の部材など）にだけ使う',
+          ],
+        };
+      }
       return {
         title: '橋の形がくずれてしまった',
         body:

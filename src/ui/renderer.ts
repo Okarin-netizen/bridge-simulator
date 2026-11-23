@@ -32,6 +32,8 @@ export interface Scene {
     carPosition: number;
     /** 形がくずれた節点（赤い丸で示す） */
     unstableNodeId?: string;
+    /** 形がくずれたときに、たるんでいたワイヤー */
+    slackWireIds: Set<string>;
     /** 予想がはずれた部材（× で示す） */
     wrongGuessIds: Set<string>;
     /** 画面に描くために大きくした、節点のたわみ（m） */
@@ -130,6 +132,12 @@ function drawnPosition(scene: Scene, node: BridgeNode): Point {
   return d ? { x: node.x + d.dx, y: node.y + d.dy } : node;
 }
 
+/** 押されてたるんだワイヤーか */
+function isSlack(scene: Scene, member: BridgeMember): boolean {
+  const test = scene.test;
+  return test !== undefined && (test.results.get(member.id)?.slack === true || test.slackWireIds.has(member.id));
+}
+
 /** 落ちていく部材か */
 function isFalling(scene: Scene, member: BridgeMember): boolean {
   const test = scene.test;
@@ -203,7 +211,7 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
     ctx.beginPath();
     if (breaking) {
       traceBrokenMember(ctx, a, b, breaking);
-    } else if (scene.test?.results.get(member.id)?.slack) {
+    } else if (isSlack(scene, member)) {
       traceSlackWire(ctx, a, b);
     } else {
       ctx.moveTo(a.x, a.y);
@@ -534,7 +542,7 @@ function memberColor(member: BridgeMember, scene: Scene): string {
   if (!scene.test) return MATERIAL_COLORS[member.material];
   if (scene.test.brokenIds.has(member.id)) return COLORS.broken;
   const result = scene.test.results.get(member.id);
-  if (result?.slack) return COLORS.slack;
+  if (isSlack(scene, member)) return COLORS.slack;
   return result ? forceColor(result.axial, result.utilization) : MATERIAL_COLORS[member.material];
 }
 

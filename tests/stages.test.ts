@@ -210,7 +210,9 @@ describe('ステージには答えがある', () => {
     for (const [[x1, y1], [x2, y2]] of truss.filter(([[, y1], [, y2]]) => y1 !== 0 || y2 !== 0)) {
       allWire.connect({ x: x1, y: y1 }, { x: x2, y: y2 }, 'wire', 'square');
     }
-    expect(test(allWire).status).toBe('unstable');
+    const sagging = test(allWire);
+    expect(sagging.status).toBe('unstable');
+    expect(sagging.slackWireIds?.length).toBeGreaterThan(0);
     // 道路をワイヤーにすると、車が走れない
     expect(test(build(stage, truss, 'wire')).status).toBe('gap');
 
