@@ -1,5 +1,5 @@
 import type { Vehicle } from '../engine/crossing';
-import { GRAVITY } from '../engine/materials';
+import { GRAVITY, isTensionOnly } from '../engine/materials';
 import type { BridgeMember, BridgeNode, FailureMode, MemberResult, Point, SectionId } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
 import type { Guess } from '../game/prediction';
@@ -75,7 +75,15 @@ const SECTION_STYLES: Record<SectionId, { width: number; hollow: number; web: bo
   pipe: { width: 11, hollow: 5, web: false },
   hbeam: { width: 16, hollow: 11, web: true },
 };
+/** ワイヤーは細い 1 本の線で描く */
+const WIRE_STYLE = { width: 3, hollow: 0, web: false };
+/** たるんだワイヤーが、まん中でどれだけ垂れて見えるか（部材の長さに対する割合） */
+const SLACK_SAG = 0.08;
 const NODE_RADIUS = 6;
+
+function lineStyleOf(member: BridgeMember): { width: number; hollow: number; web: boolean } {
+  return isTensionOnly(member.material) ? WIRE_STYLE : SECTION_STYLES[member.section];
+}
 
 export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   const { width, height } = ctx.canvas.getBoundingClientRect();
@@ -189,14 +197,16 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
     ctx.beginPath();
     if (breaking) {
       traceBrokenMember(ctx, a, b, breaking);
+    } else if (scene.test?.results.get(member.id)?.slack) {
+      traceSlackWire(ctx, a, b);
     } else {
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
     }
-    strokeSection(ctx, member.section, memberColor(member, scene));
+    strokeSection(ctx, lineStyleOf(member), memberColor(member, scene));
 
     if (member.id === scene.selectedMemberId) {
-      ctx.lineWidth = SECTION_STYLES[member.section].width + 10;
+      ctx.lineWidth = lineStyleOf(member).width + 10;
       ctx.strokeStyle = 'rgba(31, 42, 55, 0.25)';
       ctx.stroke();
     }
@@ -208,8 +218,11 @@ function drawMembers(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
  * 断面のちがいが見てわかるよう、部材の線の描き方を変える。
  * 角材は細い 1 本の線、パイプは中が空いた太い線、H 形はいちばん太く、まん中に縦の板（ウェブ）の線を入れる。
  */
-function strokeSection(ctx: CanvasRenderingContext2D, section: SectionId, color: string): void {
-  const style = SECTION_STYLES[section];
+function strokeSection(
+  ctx: CanvasRenderingContext2D,
+  style: { width: number; hollow: number; web: boolean },
+  color: string,
+): void {
   ctx.strokeStyle = color;
   ctx.lineWidth = style.width;
   ctx.stroke();
@@ -231,6 +244,8 @@ function strokeSection(ctx: CanvasRenderingContext2D, section: SectionId, color:
  */
 function drawSectionMarks(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene): void {
   for (const member of scene.design.members) {
+    // ワイヤーは断面を選ばないので、印をつけない
+    if (isTensionOnly(member.material)) continue;
     const [a, b] = scene.design.endsOf(member).map((p) => camera.toScreen(p.x, p.y));
     const length = Math.hypot(b.x - a.x, b.y - a.y);
     if (length < 50) continue;
@@ -263,6 +278,14 @@ function drawSectionMarks(ctx: CanvasRenderingContext2D, camera: Camera, scene: 
       ctx.fillRect(mark.x - 1, mark.y - 5.5, 2, 11);
     }
   }
+}
+
+/** 押されてたるんだワイヤーは、まん中が下に垂れた線にする */
+function traceSlackWire(ctx: CanvasRenderingContext2D, a: Point, b: Point): void {
+  const sag = Math.hypot(b.x - a.x, b.y - a.y) * SLACK_SAG;
+  // 2 次曲線の制御点は、垂れたい量の 2 倍の所に置く
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo((a.x + b.x) / 2, (a.y + b.y) / 2 + sag * 2, b.x, b.y);
 }
 
 /**
@@ -466,7 +489,7 @@ function drawGuesses(ctx: CanvasRenderingContext2D, camera: Camera, scene: Scene
     const guess = scene.guesses?.get(member.id);
     if (!guess) continue;
     const [a, b] = scene.design.endsOf(member).map((p) => camera.toScreen(p.x, p.y));
-    ctx.lineWidth = SECTION_STYLES[member.section].width + 6;
+    ctx.lineWidth = lineStyleOf(member).width + 6;
     ctx.strokeStyle = guess === 'compression' ? 'rgb(197, 58, 28)' : 'rgb(30, 64, 175)';
     ctx.globalAlpha = 0.55;
     ctx.beginPath();
@@ -502,6 +525,7 @@ function memberColor(member: BridgeMember, scene: Scene): string {
   if (!scene.test) return MATERIAL_COLORS[member.material];
   if (scene.test.brokenIds.has(member.id)) return COLORS.broken;
   const result = scene.test.results.get(member.id);
+  if (result?.slack) return COLORS.slack;
   return result ? forceColor(result.axial, result.utilization) : MATERIAL_COLORS[member.material];
 }
 

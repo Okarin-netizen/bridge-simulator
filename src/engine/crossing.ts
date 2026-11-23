@@ -1,5 +1,5 @@
 import { analyze, worstUtilization } from './analyze';
-import { GRAVITY } from './materials';
+import { GRAVITY, isTensionOnly } from './materials';
 import type { AnalysisResult, Bridge, BridgeMember, BridgeNode, FailureMode, NodeLoad } from './types';
 
 export interface Vehicle {
@@ -48,6 +48,11 @@ export interface CrossingOutcome {
 export interface CrossingOptions {
   /** 道路の高さ（m）。この高さの水平な部材を車が走る */
   roadY: number;
+  /**
+   * 谷の幅（m）。道路は x = 0 から x = span までつなぐ。
+   * 省くと、道路の高さにある支点のうち、いちばん左から右までになる
+   */
+  span?: number;
   /** 何 m ごとに計算するか */
   step?: number;
 }
@@ -55,7 +60,7 @@ export interface CrossingOptions {
 /** 車を左から右へ少しずつ進め、位置ごとに橋を計算する（準静的解析） */
 export function simulateCrossing(bridge: Bridge, vehicle: Vehicle, options: CrossingOptions): CrossingOutcome {
   const step = options.step ?? 0.5;
-  const road = findRoad(bridge, options.roadY);
+  const road = findRoad(bridge, options.roadY, options.span);
   const outcome: CrossingOutcome = { status: 'crossed', frames: [], broken: [], maxUtilization: 0, stoppedAt: null };
 
   if (road.gapAt !== null) {
@@ -97,8 +102,8 @@ interface Road {
   gapAt: number | null;
 }
 
-/** 道路になる部材（roadY の高さにある水平な部材）を左から順に並べる */
-function findRoad(bridge: Bridge, roadY: number): Road {
+/** 道路になる部材（roadY の高さにある水平な部材）を左から順に並べる。ワイヤーの上は車が走れない */
+function findRoad(bridge: Bridge, roadY: number, span: number | undefined): Road {
   const nodeById = new Map(bridge.nodes.map((n) => [n.id, n]));
   const onRoad = (node: BridgeNode) => Math.abs(node.y - roadY) < 1e-6;
 
@@ -106,15 +111,15 @@ function findRoad(bridge: Bridge, roadY: number): Road {
   for (const member of bridge.members) {
     const a = nodeById.get(member.a)!;
     const b = nodeById.get(member.b)!;
-    if (!onRoad(a) || !onRoad(b) || a.x === b.x) continue;
+    if (!onRoad(a) || !onRoad(b) || a.x === b.x || isTensionOnly(member.material)) continue;
     segments.push(a.x < b.x ? { member, left: a, right: b } : { member, left: b, right: a });
   }
   segments.sort((p, q) => p.left.x - q.left.x);
 
-  // 道路は両岸の支点のあいだをつなぐ
+  // 道路は両岸のあいだをつなぐ
   const anchors = bridge.nodes.filter((n) => n.support && onRoad(n)).map((n) => n.x);
-  const start = Math.min(...anchors);
-  const end = Math.max(...anchors);
+  const start = span === undefined ? Math.min(...anchors) : 0;
+  const end = span === undefined ? Math.max(...anchors) : span;
 
   let reached = start;
   for (const segment of segments) {

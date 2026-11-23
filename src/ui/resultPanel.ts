@@ -1,4 +1,3 @@
-import { MATERIALS, SECTIONS } from '../engine/materials';
 import type { BridgeMember, MemberResult } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
 import { memberCost } from '../game/design';
@@ -8,7 +7,7 @@ import type { PredictionScore } from '../game/prediction';
 import type { StarCheck } from '../game/score';
 import { utilizationPercent } from '../game/score';
 import { choiceButton } from './dom';
-import { forceText, yen } from './format';
+import { forceText, memberKind, yen } from './format';
 
 /*
  * 右のパネルに出す、選んだ部材の情報と試験の結果と、振り返りを書く欄。
@@ -23,10 +22,12 @@ export function starText(count: number): string {
 export function memberInfoHtml(design: BridgeDesign, member: BridgeMember, result?: MemberResult): string {
   const length = design.lengthOf(member);
   const lines = [
-    `<b>${MATERIALS[member.material].name}・${SECTIONS[member.section].name} ${length.toFixed(1)} m</b>`,
+    `<b>${memberKind(member)} ${length.toFixed(1)} m</b>`,
     `値段 ${yen(memberCost(member, length))}`,
   ];
-  if (result) {
+  if (result?.slack) {
+    lines.push('<b>たるんでいる</b>（ワイヤーは押されると、たるんで力を伝えない）');
+  } else if (result) {
     lines.push(
       modeLabel(result.axial),
       `かかる力 <b>${forceText(result.axial)}</b>`,

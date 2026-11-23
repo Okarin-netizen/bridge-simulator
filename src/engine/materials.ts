@@ -19,10 +19,18 @@ export const MATERIALS: Record<MaterialId, Material> = {
   wood: { id: 'wood', name: '木材', E: 8e9, strength: 20e6, density: 450, pricePerMeter: 400 },
   steel: { id: 'steel', name: '鋼材', E: 205e9, strength: 235e6, density: 7850, pricePerMeter: 2500 },
   aluminum: { id: 'aluminum', name: 'アルミ合金', E: 70e9, strength: 150e6, density: 2700, pricePerMeter: 2000 },
+  // 鋼の細い線をより合わせたケーブル。引っぱりにはとても強いが、押されるとたるんで力を伝えない
+  wire: { id: 'wire', name: 'ワイヤー', E: 160e9, strength: 1200e6, density: 7850, pricePerMeter: 300 },
 };
 
+/** 引っぱる力だけを伝える材料か */
+export function isTensionOnly(material: MaterialId): boolean {
+  return material === 'wire';
+}
+
 export interface Section {
-  id: SectionId;
+  /** cable はワイヤー専用の断面で、生徒は選ばない */
+  id: SectionId | 'cable';
   name: string;
   /** 断面積（m²） */
   A: number;
@@ -67,5 +75,24 @@ export const SECTIONS: Record<SectionId, Section> = {
   pipe: { id: 'pipe', name: 'パイプ', ...pipe(0.2, 0.1651), priceFactor: 1.3 },
   hbeam: { id: 'hbeam', name: 'H形', ...hbeam(0.15, 0.2, 0.02, 0.015), priceFactor: 1.5 },
 };
+
+/**
+ * ワイヤーの断面（直径 2 cm のケーブル）。太さは選べないので、断面の選択にかかわらずこれを使う。
+ * 曲げや押す力は受けないので、曲がりにくさは 0 にしておく
+ */
+export const CABLE_SECTION: Section = {
+  id: 'cable',
+  name: 'ケーブル',
+  A: (Math.PI / 4) * 0.02 ** 2,
+  I: 0,
+  Imin: 0,
+  Z: 0,
+  priceFactor: 1,
+};
+
+/** 部材の断面。ワイヤーはいつもケーブルの断面になる */
+export function sectionOf(member: { material: MaterialId; section: SectionId }): Section {
+  return isTensionOnly(member.material) ? CABLE_SECTION : SECTIONS[member.section];
+}
 
 export const GRAVITY = 9.81;

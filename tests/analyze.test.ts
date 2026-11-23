@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { analyze } from '../src/engine/analyze';
 import { MATERIALS, SECTIONS } from '../src/engine/materials';
 import type { Bridge, BridgeNode, MemberResult } from '../src/engine/types';
+import { memberCost } from '../src/game/design';
 import { buildPrattTruss } from '../src/game/presets';
 
 const P = 10_000; // 10 kN
@@ -148,5 +149,60 @@ describe('壊れ方の判定', () => {
     const chord = member(result, 'B1-B2');
     expect(chord.mode).toBe('tension');
     expect(chord.utilization).toBeCloseTo(chord.axial / (MATERIALS.steel.strength * SECTIONS.square.A), 6);
+  });
+});
+
+describe('ワイヤー（引っぱる力だけを伝える部材）', () => {
+  // 左右の支点から、まん中の節点へ斜めに 2 本。頂点が下にあると引っぱられ、上にあると押される
+  function vShape(apexY: number): Bridge {
+    return {
+      nodes: [node('A', 0, 0, { support: 'pin' }), node('B', 4, 0, { support: 'pin' }), node('C', 2, apexY)],
+      members: [
+        { id: 'AC', a: 'A', b: 'C', material: 'wire', section: 'square' },
+        { id: 'BC', a: 'B', b: 'C', material: 'wire', section: 'square' },
+      ],
+    };
+  }
+
+  it('引っぱられるワイヤーは、ふつうのトラスの部材と同じ力を伝える', () => {
+    const result = analyze(vShape(-2), [{ node: 'C', fx: 0, fy: -P }], { includeSelfWeight: false });
+    expect(result.stable).toBe(true);
+    expect(member(result, 'AC').axial).toBeCloseTo(P / (2 * Math.sin(Math.PI / 4)), 3);
+    expect(member(result, 'AC').slack).toBeFalsy();
+  });
+
+  it('押されるワイヤーはたるみ、支えるものがなくなって形がくずれる', () => {
+    const result = analyze(vShape(2), [{ node: 'C', fx: 0, fy: -P }], { includeSelfWeight: false });
+    expect(result.stable).toBe(false);
+  });
+
+  it('たすきがけにすると、押される側だけたるんで、もう 1 本が力を受け持つ', () => {
+    // 四角形 ABDC に、木の上の部材とワイヤーの対角線 2 本。上の節点を横に押す
+    const bridge: Bridge = {
+      nodes: [
+        node('A', 0, 0, { support: 'pin' }),
+        node('B', 4, 0, { support: 'pin' }),
+        node('C', 0, 4),
+        node('D', 4, 4),
+      ],
+      members: [
+        { id: 'AC', a: 'A', b: 'C', material: 'wood', section: 'square' },
+        { id: 'BD', a: 'B', b: 'D', material: 'wood', section: 'square' },
+        { id: 'CD', a: 'C', b: 'D', material: 'wood', section: 'square' },
+        { id: 'AD', a: 'A', b: 'D', material: 'wire', section: 'square' },
+        { id: 'BC', a: 'B', b: 'C', material: 'wire', section: 'square' },
+      ],
+    };
+    const result = analyze(bridge, [{ node: 'C', fx: P, fy: 0 }], { includeSelfWeight: false });
+    expect(result.stable).toBe(true);
+    expect(member(result, 'BC').slack).toBe(true);
+    expect(member(result, 'BC').axial).toBe(0);
+    // 横の力は、引っぱられる対角線 AD がすべて受け持つ：N = P / cos 45°
+    expect(member(result, 'AD').axial).toBeCloseTo(P * Math.SQRT2, 3);
+  });
+
+  it('ワイヤーの値段は、選んでいた断面によらず 1 m 300 円', () => {
+    const wire = { id: 'w', a: 'A', b: 'B', material: 'wire' as const, section: 'hbeam' as const };
+    expect(memberCost(wire, 10)).toBe(3000);
   });
 });

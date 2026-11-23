@@ -28,7 +28,7 @@ function build(stage: Stage, segments: Segment[], material: MaterialId = 'wood',
 
 function test(design: BridgeDesign) {
   const vehicle = VEHICLES.find((v) => v.id === design.stage.vehicleId)!;
-  return simulateCrossing(design.toBridge(), vehicle, { roadY: design.stage.roadY });
+  return simulateCrossing(design.toBridge(), vehicle, { roadY: design.stage.roadY, span: design.stage.span });
 }
 
 /** ★3 の条件（わたり切る・予算内・負担率 70% 以下）をすべて満たすか */
@@ -65,6 +65,23 @@ function steelWhereCompressed(stage: Stage): BridgeDesign {
     const isEndPost = (x1 === 0 || x1 === stage.span) && y2 > 0;
     const [material, section]: [MaterialId, SectionId] = isTopChord || isEndPost ? ['steel', 'square'] : ['wood', 'pipe'];
     expect(design.connect({ x: x1, y: y1 }, { x: x2, y: y2 }, material, section)).toBeNull();
+  }
+  return design;
+}
+
+/**
+ * 道路の下に組んだトラスで、いつも引っぱられる部材（いちばん下の弦材・両はしの斜材・まん中の縦の部材）を
+ * ワイヤーに、ほかを木のパイプにした橋
+ */
+function wireWhereStretched(stage: Stage): BridgeDesign {
+  const design = new BridgeDesign(stage);
+  const bottom = -4;
+  for (const [[x1, y1], [x2, y2]] of pratt(stage.span, bottom)) {
+    const isBottomChord = y1 === bottom && y2 === bottom;
+    const isEndDiagonal = (x1 === 0 || x1 === stage.span) && y2 === bottom;
+    const isMiddlePost = x1 === stage.span / 2 && x2 === stage.span / 2;
+    const material: MaterialId = isBottomChord || isEndDiagonal || isMiddlePost ? 'wire' : 'wood';
+    expect(design.connect({ x: x1, y: y1 }, { x: x2, y: y2 }, material, 'pipe')).toBeNull();
   }
   return design;
 }
@@ -181,6 +198,22 @@ describe('ステージには答えがある', () => {
 
   it('4-1：24 m の谷でも、押される部材を鉄にすればバスがわたれる', () => {
     expectThreeStars(steelWhereCompressed(stageById('4-1')));
+  });
+
+  it('5-1：木だけでは予算オーバー。道路のほかを全部ワイヤーにするとたるんでくずれ、いつも引っぱられる部材だけワイヤーにするとわたれる', () => {
+    const stage = stageById('5-1');
+    const truss = pratt(16, -4);
+    expect(build(stage, truss, 'wood', 'pipe').totalCost()).toBeGreaterThan(stage.budget);
+    // 道路のほかを全部ワイヤーにすると、押される部材がたるんで形がくずれる
+    const allWire = build(stage, truss.filter(([[, y1], [, y2]]) => y1 === 0 && y2 === 0), 'wood', 'pipe');
+    for (const [[x1, y1], [x2, y2]] of truss.filter(([[, y1], [, y2]]) => y1 !== 0 || y2 !== 0)) {
+      allWire.connect({ x: x1, y: y1 }, { x: x2, y: y2 }, 'wire', 'square');
+    }
+    expect(test(allWire).status).toBe('unstable');
+    // 道路をワイヤーにすると、車が走れない
+    expect(test(build(stage, truss, 'wire')).status).toBe('gap');
+
+    expectThreeStars(wireWhereStretched(stage));
   });
 });
 

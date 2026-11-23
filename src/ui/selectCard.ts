@@ -1,11 +1,11 @@
-import { MATERIALS, SECTIONS } from '../engine/materials';
+import { isTensionOnly, MATERIALS, SECTIONS } from '../engine/materials';
 import type { BridgeMember, BridgeNode, JointType, MaterialId, SectionId } from '../engine/types';
 import type { BridgeDesign } from '../game/design';
 import { memberCost } from '../game/design';
 import { RIGID_JOINT_PRICE } from '../game/stage';
 import { MATERIAL_COLORS } from './colors';
 import { choiceButton } from './dom';
-import { yen } from './format';
+import { memberKind, yen } from './format';
 import { SECTION_ICONS } from './sectionIcons';
 
 /*
@@ -30,7 +30,7 @@ export interface NodeCardActions {
 export function memberCard(design: BridgeDesign, member: BridgeMember, actions: MemberCardActions): HTMLElement[] {
   const { stage } = design;
   const length = design.lengthOf(member);
-  const title = `選んだ部材：${MATERIALS[member.material].name}・${SECTIONS[member.section].name}　長さ ${length.toFixed(1)} m　${yen(memberCost(member, length))}`;
+  const title = `選んだ部材：${memberKind(member)}　長さ ${length.toFixed(1)} m　${yen(memberCost(member, length))}`;
 
   const rows: HTMLElement[] = [];
   // 1 種類しか選べないステージでは、かえようがないので出さない
@@ -47,7 +47,8 @@ export function memberCard(design: BridgeDesign, member: BridgeMember, actions: 
       ),
     );
   }
-  if (stage.sections.length > 1) {
+  // ワイヤーは太さが決まっているので、断面は選ばない
+  if (stage.sections.length > 1 && !isTensionOnly(member.material)) {
     rows.push(
       optionRow(
         stage.sections.map((id) =>

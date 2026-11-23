@@ -1,4 +1,4 @@
-import { MATERIALS, SECTIONS } from '../engine/materials';
+import { CABLE_SECTION, isTensionOnly, MATERIALS, SECTIONS } from '../engine/materials';
 import type { MaterialId, SectionId } from '../engine/types';
 import type { Stage } from '../game/stage';
 import { COLORS, MATERIAL_COLORS } from './colors';
@@ -20,14 +20,24 @@ export function materialButtons(
   const strengthOf = (id: MaterialId) => Math.round(MATERIALS[id].strength / MATERIALS.wood.strength);
   return ids.map((id) => {
     const material = MATERIALS[id];
+    const strength = isTensionOnly(id) ? `引っぱり ×${wireStrength()}` : `強さ ×${strengthOf(id)}`;
     return choiceButton(
-      `<span class="material-swatch" style="background:${MATERIAL_COLORS[id]}"></span>${material.name}` +
-        `<small>強さ ×${strengthOf(id)}<br>1 m ${yen(material.pricePerMeter)}</small>`,
+      `<span class="material-name"><span class="material-swatch" style="background:${MATERIAL_COLORS[id]}"></span>${material.name}</span>` +
+        `<small>${strength}<br>1 m ${yen(material.pricePerMeter)}</small>`,
       selected === id,
       () => onSelect(id),
       'choice',
     );
   });
+}
+
+/**
+ * ワイヤーは細いので、材料の強さではなく、1 本で引っぱりにたえられる力が木の角材の何倍かで見せる
+ */
+function wireStrength(): number {
+  const wire = MATERIALS.wire.strength * CABLE_SECTION.A;
+  const woodSquare = MATERIALS.wood.strength * SECTIONS.square.A;
+  return Math.round(wire / woodSquare);
 }
 
 export function sectionButtons(

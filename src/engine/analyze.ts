@@ -1,4 +1,4 @@
-import { GRAVITY, MATERIALS, SECTIONS } from './materials';
+import { GRAVITY, isTensionOnly, MATERIALS, sectionOf } from './materials';
 import { solveLinearSystem } from './linalg';
 import type {
   AnalysisResult,
@@ -17,6 +17,10 @@ import type {
  * 部材は「梁要素」として扱い、ピン接合の端では曲げモーメントを解放する。
  * 両端がピンの部材は、軸力だけを伝える「トラス要素」と同じ働きになる。
  * こうすることで、トラス構造とラーメン構造を同じ計算で扱える。
+ *
+ * ワイヤーは引っぱる力しか伝えない。いちばん強く押されているワイヤーを「たるんだ」ものとして 1 本ずつ外し、
+ * 外したワイヤーがまた引っぱられる向きになったら戻す、をくり返して、つり合う形を探す。
+ * まとめて外さないのは、たすきがけの 2 本が両方とも少し押されているとき、片方だけ外せば形が保てるため。
  */
 
 const DOF_PER_NODE = 3;
@@ -43,14 +47,51 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
   const nodes = bridge.nodes.filter((n) => usedNodeIds.has(n.id));
   const nodeIndex = new Map(nodes.map((n, i) => [n.id, i]));
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
-
   const geometries = bridge.members.map((member) => describeMember(member, nodeById));
 
+  // 重さは、たるんだワイヤーの分もふくめて、はじめに決めておく
+  const f = loadVector(nodes.length, nodeIndex, loads, includeSelfWeight ? geometries : []);
+
+  // たるんだワイヤーを探しなおす回数の上限。ワイヤーを 1 本ずつ外すので、本数に合わせる
+  const wireCount = geometries.filter((g) => isTensionOnly(g.member.material)).length;
+  const attempts = 2 * wireCount + 5;
+
+  let slackIds = new Set<string>();
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const active = geometries.filter((g) => !slackIds.has(g.member.id));
+    const solved = solveFrame(nodes, nodeIndex, active, f);
+    if (!solved.stable) return unstableResult(solved.unstableNodeId);
+
+    const nextSlackIds = nextSlackWires(geometries, slackIds, solved.u, nodeIndex);
+    if (sameIds(nextSlackIds, slackIds)) {
+      const members = geometries.map((geometry) =>
+        slackIds.has(geometry.member.id) ? slackResult(geometry) : memberResult(geometry, solved.u, nodeIndex),
+      );
+      return { stable: true, members, displacements: solved.displacements, reactions: solved.reactions };
+    }
+    slackIds = nextSlackIds;
+  }
+  // たるむ・張るが決まらずに行ったり来たりするのは、形が定まらないとき
+  return unstableResult(nodes[0]?.id);
+}
+
+interface SolvedFrame {
+  stable: true;
+  /** 全体座標系での、すべての自由度の変位 */
+  u: number[];
+  displacements: AnalysisResult['displacements'];
+  reactions: AnalysisResult['reactions'];
+}
+
+/** 決まった部材の組み合わせで、剛性マトリクスを組み立てて解く */
+function solveFrame(
+  nodes: BridgeNode[],
+  nodeIndex: Map<string, number>,
+  geometries: MemberGeometry[],
+  f: number[],
+): SolvedFrame | { stable: false; unstableNodeId: string } {
   const size = nodes.length * DOF_PER_NODE;
   const K = Array.from({ length: size }, () => new Array<number>(size).fill(0));
-  const f = new Array<number>(size).fill(0);
-
-  // 全体の剛性マトリクスを組み立てる
   for (const geometry of geometries) {
     const kGlobal = globalStiffness(geometry);
     const dofs = memberDofs(geometry, nodeIndex);
@@ -59,23 +100,8 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
     }
   }
 
-  // 荷重ベクトル
-  for (const load of loads) {
-    const index = nodeIndex.get(load.node);
-    if (index === undefined) continue;
-    f[index * DOF_PER_NODE] += load.fx;
-    f[index * DOF_PER_NODE + 1] += load.fy;
-  }
-  if (includeSelfWeight) {
-    for (const geometry of geometries) {
-      const weight = memberMass(geometry) * GRAVITY;
-      f[nodeIndex.get(geometry.nodeA.id)! * DOF_PER_NODE + 1] -= weight / 2;
-      f[nodeIndex.get(geometry.nodeB.id)! * DOF_PER_NODE + 1] -= weight / 2;
-    }
-  }
-
   // 動かない自由度（支点、ピン接合の回転）を決めて、残りの自由度だけで解く
-  const fixedDofs = findFixedDofs(nodes);
+  const fixedDofs = findFixedDofs(nodes, geometries);
   const freeDofs = [...Array(size).keys()].filter((dof) => !fixedDofs.has(dof));
 
   const reducedK = freeDofs.map((i) => freeDofs.map((j) => K[i][j]));
@@ -84,18 +110,11 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
 
   if ('singularColumn' in solved) {
     const unstableNode = nodes[Math.floor(freeDofs[solved.singularColumn] / DOF_PER_NODE)];
-    return {
-      stable: false,
-      unstableNodeId: unstableNode.id,
-      members: [],
-      displacements: new Map(),
-      reactions: new Map(),
-    };
+    return { stable: false, unstableNodeId: unstableNode.id };
   }
-  const solution = solved.solution;
 
   const u = new Array<number>(size).fill(0);
-  freeDofs.forEach((dof, i) => (u[dof] = solution[i]));
+  freeDofs.forEach((dof, i) => (u[dof] = solved.solution[i]));
 
   const displacements = new Map(
     nodes.map((node, i) => [
@@ -115,9 +134,82 @@ export function analyze(bridge: Bridge, loads: NodeLoad[], options: AnalyzeOptio
     reactions.set(node.id, { rx, ry, m });
   });
 
-  const members = geometries.map((geometry) => memberResult(geometry, u, nodeIndex));
+  return { stable: true, u, displacements, reactions };
+}
 
-  return { stable: true, members, displacements, reactions };
+function loadVector(
+  nodeCount: number,
+  nodeIndex: Map<string, number>,
+  loads: NodeLoad[],
+  weighed: MemberGeometry[],
+): number[] {
+  const f = new Array<number>(nodeCount * DOF_PER_NODE).fill(0);
+  for (const load of loads) {
+    const index = nodeIndex.get(load.node);
+    if (index === undefined) continue;
+    f[index * DOF_PER_NODE] += load.fx;
+    f[index * DOF_PER_NODE + 1] += load.fy;
+  }
+  // 部材の自重は、半分ずつ両はしの節点にかける
+  for (const geometry of weighed) {
+    const weight = memberMass(geometry) * GRAVITY;
+    f[nodeIndex.get(geometry.nodeA.id)! * DOF_PER_NODE + 1] -= weight / 2;
+    f[nodeIndex.get(geometry.nodeB.id)! * DOF_PER_NODE + 1] -= weight / 2;
+  }
+  return f;
+}
+
+/**
+ * 次に試す、たるんだワイヤーの組み合わせ。
+ * たるませていたワイヤーのうち、両はしが離れた（引っぱられる向きになった）ものは張りなおし、
+ * 張っているワイヤーのうち、いちばん縮もうとしている 1 本をたるませる
+ */
+function nextSlackWires(
+  geometries: MemberGeometry[],
+  slackIds: Set<string>,
+  u: number[],
+  nodeIndex: Map<string, number>,
+): Set<string> {
+  const next = new Set<string>();
+  let mostSqueezed: { id: string; strain: number } | null = null;
+  for (const geometry of geometries) {
+    if (!isTensionOnly(geometry.member.material)) continue;
+    const { id } = geometry.member;
+    const strain = elongation(geometry, u, nodeIndex) / geometry.length;
+    if (slackIds.has(id)) {
+      if (strain <= 0) next.add(id);
+    } else if (strain < 0 && (!mostSqueezed || strain < mostSqueezed.strain)) {
+      mostSqueezed = { id, strain };
+    }
+  }
+  if (mostSqueezed) next.add(mostSqueezed.id);
+  return next;
+}
+
+/** 部材の両はしが、部材の向きにどれだけ離れたか（m）。縮んだときはマイナス */
+function elongation(geometry: MemberGeometry, u: number[], nodeIndex: Map<string, number>): number {
+  const [ua, va, , ub, vb] = memberDofs(geometry, nodeIndex).map((dof) => u[dof]);
+  return (ub - ua) * geometry.cos + (vb - va) * geometry.sin;
+}
+
+function sameIds(a: Set<string>, b: Set<string>): boolean {
+  return a.size === b.size && [...a].every((id) => b.has(id));
+}
+
+function unstableResult(unstableNodeId: string | undefined): AnalysisResult {
+  return { stable: false, unstableNodeId, members: [], displacements: new Map(), reactions: new Map() };
+}
+
+function slackResult(geometry: MemberGeometry): MemberResult {
+  return {
+    id: geometry.member.id,
+    length: geometry.length,
+    axial: 0,
+    moment: 0,
+    utilization: 0,
+    mode: 'tension',
+    slack: true,
+  };
 }
 
 /** いちばん苦しい部材の負担率（部材がなければ 0） */
@@ -139,7 +231,7 @@ function describeMember(member: BridgeMember, nodeById: Map<string, BridgeNode>)
 }
 
 function memberMass({ member, length }: Pick<MemberGeometry, 'member' | 'length'>): number {
-  return MATERIALS[member.material].density * SECTIONS[member.section].A * length;
+  return MATERIALS[member.material].density * sectionOf(member).A * length;
 }
 
 function memberDofs(geometry: MemberGeometry, nodeIndex: Map<string, number>): number[] {
@@ -151,10 +243,21 @@ function memberDofs(geometry: MemberGeometry, nodeIndex: Map<string, number>): n
 /** 部材座標系での剛性マトリクス（ピン接合の端はモーメントを解放したもの） */
 function localStiffness(geometry: MemberGeometry): number[][] {
   const { E } = MATERIALS[geometry.member.material];
-  const { A, I } = SECTIONS[geometry.member.section];
+  const { A, I } = sectionOf(geometry.member);
   const L = geometry.length;
 
   const axial = (E * A) / L;
+  // ワイヤーは曲げを伝えないので、軸の向きの硬さだけ
+  if (isTensionOnly(geometry.member.material)) {
+    return [
+      [axial, 0, 0, -axial, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+      [-axial, 0, 0, axial, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+    ];
+  }
   const b1 = (12 * E * I) / L ** 3;
   const b2 = (6 * E * I) / L ** 2;
   const b3 = (4 * E * I) / L;
@@ -210,14 +313,21 @@ function globalStiffness(geometry: MemberGeometry): number[][] {
   return multiply(transpose(T), kT);
 }
 
-function findFixedDofs(nodes: BridgeNode[]): Set<number> {
+function findFixedDofs(nodes: BridgeNode[], geometries: MemberGeometry[]): Set<number> {
+  // 曲げを伝える部材（ワイヤー以外）がつながっている節点
+  const bentNodeIds = new Set(
+    geometries
+      .filter((g) => !isTensionOnly(g.member.material))
+      .flatMap((g) => [g.nodeA.id, g.nodeB.id]),
+  );
   const fixed = new Set<number>();
   nodes.forEach((node, i) => {
     const base = i * DOF_PER_NODE;
     if (node.support === 'pin' || node.support === 'fixed') fixed.add(base);
     if (node.support) fixed.add(base + 1);
-    // ピン接合の節点はどの部材にも回転を伝えないので、回転の自由度は計算から外す
-    if (node.support === 'fixed' || node.joint === 'pin') fixed.add(base + 2);
+    // ピン接合の節点はどの部材にも回転を伝えないので、回転の自由度は計算から外す。
+    // ワイヤーだけがつながる節点も、回転を止めるものがないので外す
+    if (node.support === 'fixed' || node.joint === 'pin' || !bentNodeIds.has(node.id)) fixed.add(base + 2);
   });
   return fixed;
 }
@@ -247,7 +357,11 @@ function judgeStrength(
   moment: number,
 ): { utilization: number; mode: FailureMode } {
   const { E, strength } = MATERIALS[geometry.member.material];
-  const { A, Imin, Z } = SECTIONS[geometry.member.section];
+  const { A, Imin, Z } = sectionOf(geometry.member);
+  // ワイヤーは引っぱられたときだけ力を受ける（押される向きのときは、ここに来る前にたるませている）
+  if (isTensionOnly(geometry.member.material)) {
+    return { utilization: Math.max(0, axial) / (strength * A), mode: 'tension' };
+  }
 
   const axialRatio = Math.abs(axial) / (strength * A);
   const bendingRatio = moment / (strength * Z);
