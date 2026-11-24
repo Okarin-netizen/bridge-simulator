@@ -41,6 +41,16 @@ describe('最安記録と名人ライン', () => {
     expect(progress.hasPerfectPrediction('1-2')).toBe(false);
   });
 
+  it('「はじめから」で、星も最安記録も予想ぴたりも消える', () => {
+    const progress = new Progress();
+    progress.record('1-1', 3, 9_000);
+    progress.recordPerfectPrediction('1-1');
+    progress.clear();
+    expect(progress.starsFor('1-1')).toBe(0);
+    expect(progress.bestCostFor('1-1')).toBeUndefined();
+    expect(progress.hasPerfectPrediction('1-1')).toBe(false);
+  });
+
   describe('保存した記録がこわれていても遊べる', () => {
     afterEach(() => vi.unstubAllGlobals());
 

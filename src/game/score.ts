@@ -95,6 +95,20 @@ export class Progress {
     this.perfectPredictions[stageId] = 1;
     save(PREDICTION_KEY, this.perfectPredictions);
   }
+
+  /** 星と記録を全部消す（タイトル画面の「はじめから」） */
+  clear(): void {
+    this.bestStars = {};
+    this.bestCost = {};
+    this.perfectPredictions = {};
+    for (const key of [STARS_KEY, COST_KEY, PREDICTION_KEY]) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // 消せなくても、遊んでいるあいだは消えたことになる
+      }
+    }
+  }
 }
 
 function load(key: string): Record<string, number> {

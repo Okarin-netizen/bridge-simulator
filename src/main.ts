@@ -9,7 +9,7 @@ import { isPerfectPrediction, nextGuess, scorePredictions } from './game/predict
 import type { Guess } from './game/prediction';
 import { countStars, isMasterBuild, Progress, rateAttempt, STAR_GOALS, utilizationPercent } from './game/score';
 import type { StarCheck } from './game/score';
-import { loadWork, saveWork } from './game/savedWork';
+import { forgetAllWork, loadLastStageId, loadWork, saveLastStageId, saveWork } from './game/savedWork';
 import {
   buildCustomStage,
   CustomStageShelf,
@@ -165,10 +165,16 @@ function setupControls(): void {
     draw();
   });
 
-  // 「はじめる」だけでなく、動いている橋のどこを押しても始められるようにする（先生用ページへのリンクはのぞく）
+  // 「はじめる」「続きから」だけでなく、動いている橋のどこを押しても始められるようにする。
+  // 先生用ページへのリンクと「はじめから」は、それぞれのはたらきだけにする
   $('title-screen').addEventListener('click', (event) => {
-    if (!(event.target instanceof HTMLAnchorElement)) leaveTitle();
+    if (event.target instanceof Element && event.target.closest('a, #title-new')) return;
+    leaveTitle();
   });
+  $('title-new').addEventListener('click', () => ($('confirm-new').hidden = false));
+  $('confirm-new-cancel').addEventListener('click', () => ($('confirm-new').hidden = true));
+  $('confirm-new-ok').addEventListener('click', startOver);
+  $('back-to-title').addEventListener('click', showTitle);
   $('open-stage-select').addEventListener('click', showStageSelect);
   $('load-sample').addEventListener('click', () => changeDesign(() => design.loadSample()));
   $('undo').addEventListener('click', undo);
@@ -210,17 +216,43 @@ function setupControls(): void {
   }
 }
 
-/** タイトル画面から、ステージ選択へ進む */
+/**
+ * タイトル画面を出す。前に遊んだステージがあれば「続きから」と「はじめから」を、
+ * なければ「はじめる」だけを見せる
+ */
+function showTitle(): void {
+  const canContinue = loadLastStageId() !== undefined;
+  $('title-start').textContent = canContinue ? '続きから' : 'はじめる';
+  $('title-new').hidden = !canContinue;
+  $('stage-select').hidden = true;
+  $('title-screen').hidden = false;
+  titleDemo.start();
+}
+
+/**
+ * タイトル画面から先へ進む。
+ * 「続きから」のときは、最後に遊んだステージがもううしろで開いているので、そのまま見せる
+ */
 function leaveTitle(): void {
   titleDemo.stop();
   $('title-screen').hidden = true;
   play('place');
+  const continuing = loadLastStageId() === stage.id;
   if (linkedStage) {
-    openStage(linkedStage);
+    playStage(linkedStage);
     linkedStage = null;
-  } else {
+  } else if (!continuing) {
     showStageSelect();
   }
+}
+
+/** 星や記録、組んだ橋を全部消して、はじめての人と同じところから始める */
+function startOver(): void {
+  progress.clear();
+  forgetAllWork();
+  $('confirm-new').hidden = true;
+  openStage(STAGES[0]);
+  leaveTitle();
 }
 
 function showSoundSetting(): void {
@@ -276,6 +308,20 @@ function setPredicting(on: boolean): void {
  */
 function startHint(): string {
   return phoneLayout.matches ? introText(stage) : stage.hint;
+}
+
+/** 生徒が選んだステージを開く。タイトル画面の「続きから」でもどれるよう、覚えておく */
+function playStage(next: Stage): void {
+  saveLastStageId(next.id);
+  openStage(next);
+}
+
+/** 最後に遊んだステージ。自分で作ったステージを消したときなど、見つからなければ undefined */
+function lastPlayedStage(): Stage | undefined {
+  const id = loadLastStageId();
+  const custom = customStages.entries.find((entry) => entry.id === id);
+  if (custom) return buildCustomStage(custom);
+  return [...STAGES, SANDBOX_STAGE].find((s) => s.id === id);
 }
 
 /** ステージを開いて、そのステージで使える材料や道具だけを並べる */
@@ -343,14 +389,14 @@ function showStageSelect(): void {
     [...STAGES, SANDBOX_STAGE],
     (s) => (isSandbox(s) ? '' : record(s)),
     nextStage?.id,
-    openStage,
+    playStage,
   );
   const custom = customStageGroup(
     customStages.entries.map((entry) => {
       const stage = buildCustomStage(entry);
       return { entry, stage, record: record(stage) };
     }),
-    { open: openStage, edit: openStageMaker, create: () => openStageMaker() },
+    { open: playStage, edit: openStageMaker, create: () => openStageMaker() },
   );
   $('stage-list').replaceChildren(...groups, custom);
   $('stage-select').hidden = false;
@@ -367,7 +413,7 @@ function openStageMaker(entry?: CustomStageEntry): void {
     if (!settings) return;
     const saved = entry ? customStages.update(entry.id, settings) : customStages.add(settings);
     closeMaker();
-    if (saved) openStage(buildCustomStage(saved));
+    if (saved) playStage(buildCustomStage(saved));
   };
   const remove = () => {
     if (!entry) return;
@@ -1059,12 +1105,13 @@ function saveReport(test: TestPlayback, resultTitle: string): void {
 
 setupControls();
 receiveLinkedStage();
-openStage(STAGES[0]);
+// 「続きから」ですぐ見せられるよう、最後に遊んだステージをタイトル画面のうしろで開いておく
+openStage(lastPlayedStage() ?? STAGES[0]);
 // パネルの幅が変わったときも描き直せるよう、キャンバスの大きさの変化を見張る
 new ResizeObserver(resizeCanvas).observe(canvas);
 new ResizeObserver(() => titleDemo.resize()).observe($('title-canvas'));
 refresh();
-titleDemo.start();
+showTitle();
 
 // 一度開けば、ネットが切れても使えるようにする（開発中はキャッシュがじゃまになるので公開版だけ）
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

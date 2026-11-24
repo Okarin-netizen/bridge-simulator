@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadWork, saveWork } from '../src/game/savedWork';
+import { forgetAllWork, loadLastStageId, loadWork, saveLastStageId, saveWork } from '../src/game/savedWork';
 
 function fakeStorage(initial: Record<string, string> = {}) {
   const items = new Map(Object.entries(initial));
   return {
     getItem: (key: string) => items.get(key) ?? null,
     setItem: (key: string, value: string) => void items.set(key, value),
+    removeItem: (key: string) => void items.delete(key),
   };
 }
 
@@ -23,6 +24,20 @@ describe('ステージごとの橋と振り返りを覚えておく', () => {
       expect(loadWork('1-1')).toEqual({ bridge, reflection: '三角形にしたら負担率が下がった' });
       expect(loadWork('1-2')?.reflection).toBe('');
       expect(loadWork('2-1')).toBeUndefined();
+    });
+
+    it('最後に遊んだステージを覚えておく', () => {
+      expect(loadLastStageId()).toBeUndefined();
+      saveLastStageId('2-3');
+      expect(loadLastStageId()).toBe('2-3');
+    });
+
+    it('「はじめから」で、橋も最後に遊んだステージも消える', () => {
+      saveWork('1-1', { bridge: { nodes: [], members: [] }, reflection: 'メモ' });
+      saveLastStageId('1-1');
+      forgetAllWork();
+      expect(loadWork('1-1')).toBeUndefined();
+      expect(loadLastStageId()).toBeUndefined();
     });
   });
 

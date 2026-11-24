@@ -1141,10 +1141,18 @@ canvas {
   font-weight: 700;
 }
 
-/* 押したくなる、ぷっくりしたボタン。ゆっくり大きくなったり小さくなったりして、ここを押すとわかるように */
-.title-start {
+/* 「はじめる／続きから」と、その下の小さな「はじめから」 */
+.title-actions {
   position: absolute;
   bottom: 9vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* 押したくなる、ぷっくりしたボタン。ゆっくり大きくなったり小さくなったりして、ここを押すとわかるように */
+.title-start {
   height: 72px;
   padding: 0 56px;
   border: 4px solid #fff;
@@ -1164,6 +1172,23 @@ canvas {
 @keyframes start-breathe {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.06); }
+}
+
+/* 記録を消すほうなので、「続きから」より目立たせない */
+.title-new {
+  min-height: 44px;
+  padding: 0 24px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.title-new[hidden] {
+  display: none;
 }
 
 .title-teacher {
@@ -1230,6 +1255,32 @@ canvas {
 .teacher-link {
   font-size: 13px;
   color: var(--muted);
+}
+
+.overlay-header-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* タイトル画面の上に出すので、タイトル画面より手前にする */
+.confirm-overlay {
+  z-index: 16;
+}
+
+.confirm-box {
+  width: min(480px, 100%);
+}
+
+.confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.secondary.danger {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* 章を横に並べる。広い画面では 1 行にカード 5 枚、せまい画面では章ごとに折り返す */
@@ -1748,9 +1799,13 @@ canvas {
   }
 
   /* 高さが足りず、まん中だと谷をわたる車にかかるので、あいている右の岸の上に置く */
-  .title-start {
+  .title-actions {
     right: 24px;
     bottom: 22vh;
+    gap: 8px;
+  }
+
+  .title-start {
     height: 56px;
     padding: 0 40px;
     font-size: 22px;
