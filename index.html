@@ -136,15 +136,34 @@
         </h1>
         <p class="title-catch">谷に橋をかけて、車をわたらせよう</p>
       </div>
-      <button type="button" class="primary title-start" id="title-start">はじめる</button>
+      <!-- 前に遊んだ記録があるときは「続きから」と「はじめから」、ないときは「はじめる」だけ -->
+      <div class="title-actions">
+        <button type="button" class="primary title-start" id="title-start">はじめる</button>
+        <button type="button" class="title-new" id="title-new" hidden>はじめから</button>
+      </div>
       <a class="title-teacher" href="./teacher.html" target="_blank" rel="noopener">先生用ページ</a>
+    </div>
+
+    <!-- 「はじめから」を押したときの確認。記録をうっかり消さないように -->
+    <div class="overlay confirm-overlay" id="confirm-new" hidden>
+      <div class="overlay-box confirm-box" role="alertdialog" aria-labelledby="confirm-new-title">
+        <h1 id="confirm-new-title">はじめからにする？</h1>
+        <p class="lead">これまでの<b>星・最安記録・組んだ橋・ふりかえり</b>が全部消えて、もとにもどせないよ。自分で作ったステージは残るよ。</p>
+        <div class="confirm-buttons">
+          <button type="button" class="secondary" id="confirm-new-cancel">やめる</button>
+          <button type="button" class="secondary danger" id="confirm-new-ok">消して、はじめから</button>
+        </div>
+      </div>
     </div>
 
     <div class="overlay" id="stage-select" hidden>
       <div class="overlay-box">
         <div class="overlay-header">
           <h1>かけはしラボ</h1>
-          <a class="teacher-link" href="./teacher.html" target="_blank" rel="noopener">先生用ページ</a>
+          <div class="overlay-header-links">
+            <a class="teacher-link" href="./teacher.html" target="_blank" rel="noopener">先生用ページ</a>
+            <button type="button" class="back" id="back-to-title">タイトルにもどる</button>
+          </div>
         </div>
         <p class="lead">谷に橋をかけて、車を安全にわたらせよう。どのステージから始めてもいいよ。</p>
         <div class="stage-list" id="stage-list"></div>
